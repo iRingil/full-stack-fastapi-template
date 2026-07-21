@@ -9,6 +9,9 @@ updates:
       prefix: "chore(deps)"
       prefix-development: "chore(deps-dev)"
       include: "scope"
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-minor", "version-update:semver-patch"]
   # npm
   - package-ecosystem: npm
     directory: /frontend
@@ -18,3 +21,6 @@ updates:
       prefix: "chore(deps)"
       prefix-development: "chore(deps-dev)"
       include: "scope"
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-minor", "version-update:semver-patch"]
