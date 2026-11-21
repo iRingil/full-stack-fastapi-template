@@ -1,6 +1,6 @@
 """Module for items endpoints."""
 
-from typing import Annotated, Any
+from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Path, status
@@ -50,11 +50,10 @@ class ItemsRouter:
 
     @items_router.get(
         path="/",
-        response_model=ItemsPublic,
         summary="Read Items",
         description="Getting the list of items. Anonymous users get an empty list.",
     )
-    async def read_items(self, skip: int = 0, limit: int = 100) -> Any:
+    async def read_items(self, skip: int = 0, limit: int = 100) -> ItemsPublic:
         """
         Endpoint for retrieving a list of items.
 
@@ -93,7 +92,7 @@ class ItemsRouter:
     @items_router.get(
         path="/{id}", response_model=ItemPublic, summary="Read Item by ID", description="Getting an item by ID."
     )
-    async def read_item(self, item_id: ItemIdDep) -> Any:
+    async def read_item(self, item_id: ItemIdDep) -> Item:
         """
         Endpoint for retrieving an item by its ID.
 
@@ -114,7 +113,7 @@ class ItemsRouter:
         db_item: Item = await self._get_and_validate_item(item_id=item_id)
         return await self._item_crud.update(db_obj=db_item, obj_in=item_in)
 
-    @items_router.delete(path="/{id}", response_model=Message, summary="Delete Item", description="Deleting an Item.")
+    @items_router.delete(path="/{id}", summary="Delete Item", description="Deleting an Item.")
     async def delete_item(self, item_id: ItemIdDep) -> Message:
         """
         Endpoint for deleting an item.

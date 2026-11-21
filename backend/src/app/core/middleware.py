@@ -3,17 +3,21 @@
 from collections.abc import AsyncGenerator, Awaitable, Callable
 from pathlib import Path
 from traceback import FrameSummary, extract_tb
+from typing import TYPE_CHECKING, override
 
 from fastapi import FastAPI
 from loguru import logger
-from sqlmodel.ext.asyncio.session import AsyncSession
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.cors import CORSMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
+from starlette.types import ASGIApp
 
 from app.core.config import Settings
 from app.core.db import DatabaseManager
+
+if TYPE_CHECKING:
+    from sqlmodel.ext.asyncio.session import AsyncSession
 
 __all__: tuple[str, ...] = ("MiddlewareConfigurator",)
 
@@ -47,7 +51,7 @@ def _describe_exception(exc: BaseException) -> str:
 class DbSessionMiddleware(BaseHTTPMiddleware):
     """Middleware for managing database sessions per request."""
 
-    def __init__(self, app: FastAPI, db_manager: DatabaseManager) -> None:
+    def __init__(self, app: ASGIApp, db_manager: DatabaseManager) -> None:
         """
         Initializes the middleware.
 
@@ -57,6 +61,7 @@ class DbSessionMiddleware(BaseHTTPMiddleware):
         super().__init__(app)
         self.db_manager: DatabaseManager = db_manager
 
+    @override
     async def dispatch(self, request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
         """
         Handles the request and ensures session management and general exception handling.
@@ -102,12 +107,12 @@ class MiddlewareConfigurator:
         :return: None
         """
         self._app.add_middleware(
-            middleware_class=DbSessionMiddleware,  # type: ignore[arg-type]
+            DbSessionMiddleware,
             db_manager=self._db_manager,
         )
         if self._settings.all_cors_origins:
             self._app.add_middleware(
-                middleware_class=CORSMiddleware,  # type: ignore[arg-type]
+                CORSMiddleware,
                 allow_origins=[str(origin) for origin in self._settings.all_cors_origins],
                 allow_credentials=True,
                 allow_methods=["*"],

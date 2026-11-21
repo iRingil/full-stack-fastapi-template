@@ -1,7 +1,7 @@
 """Module for login and authentication endpoints."""
 
 from datetime import timedelta
-from typing import Annotated, Any
+from typing import Annotated
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from fastapi.responses import HTMLResponse
@@ -50,7 +50,6 @@ class LoginRouter:
 
     @login_router.post(
         path="/login/access-token",
-        response_model=Token,
         summary="Login for Access Token",
         description="OAuth2 compatible token login, get an access token for future requests.",
     )
@@ -82,7 +81,7 @@ class LoginRouter:
         summary="Test Access Token",
         description="Test endpoint to validate an access token.",
     )
-    async def test_token(self, current_user: CurrentUser) -> Any:
+    async def test_token(self, current_user: CurrentUser) -> User:
         """
         Endpoint to test the validity of an access token.
 
@@ -93,7 +92,6 @@ class LoginRouter:
 
     @login_router.post(
         path="/password-recovery/{email}",
-        response_model=Message,
         summary="Recover Password",
         description="Send a password recovery email.",
     )
@@ -117,7 +115,6 @@ class LoginRouter:
 
     @login_router.post(
         path="/reset-password/",
-        response_model=Message,
         summary="Reset Password",
         description="Reset user password using a recovery token.",
     )
@@ -148,7 +145,6 @@ class LoginRouter:
 
     @login_router.post(
         path="/verify-email/",
-        response_model=Message,
         summary="Verify Email",
         description="Confirm the user's email address using the token from the verification email.",
     )
@@ -174,7 +170,6 @@ class LoginRouter:
 
     @login_router.post(
         path="/resend-verification/",
-        response_model=Message,
         summary="Resend Verification Email",
         description="Send a new verification email to a user whose email is not verified yet. "
         "Limited to one request per minute per IP address.",
@@ -199,7 +194,8 @@ class LoginRouter:
                 email_manager.send_verification_email, email_to=user.email, username=user.full_name or user.email
             )
         return Message(
-            message="If an account with that email exists and is not yet verified, a new verification email has been sent."
+            message="If an account with that email exists and is not yet verified, "
+            "a new verification email has been sent."
         )
 
     @login_router.post(

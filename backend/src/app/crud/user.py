@@ -1,6 +1,6 @@
 """Module for User CRUD operations for User model."""
 
-from typing import Any
+from typing import override
 
 from pydantic import EmailStr
 from sqlmodel import select
@@ -26,7 +26,8 @@ class UserCRUD(BaseCRUD[User, UserCreate, UserUpdate, UserPublic, UsersPublic]):
         super().__init__(session=session, model=User, public_schema=UserPublic, public_list_schema=UsersPublic)
         self._security: SecurityManager = security_manager or get_security_manager()
 
-    async def create(self, *, obj_in: UserCreate, update: dict[str, Any] | None = None) -> User:
+    @override
+    async def create(self, *, obj_in: UserCreate, update: dict[str, object] | None = None) -> User:
         """
         Creates a new user, hashing the password before saving.
 
@@ -37,7 +38,8 @@ class UserCRUD(BaseCRUD[User, UserCreate, UserUpdate, UserPublic, UsersPublic]):
         hashed_password: str = self._security.get_password_hash(password=obj_in.password)
         return await super().create(obj_in=obj_in, update={**(update or {}), "hashed_password": hashed_password})
 
-    async def update(self, *, db_obj: User, obj_in: UserUpdate, update: dict[str, Any] | None = None) -> User:
+    @override
+    async def update(self, *, db_obj: User, obj_in: UserUpdate, update: dict[str, object] | None = None) -> User:
         """
         Updates an existing user; a new password is hashed before saving.
 
@@ -46,11 +48,11 @@ class UserCRUD(BaseCRUD[User, UserCreate, UserUpdate, UserPublic, UsersPublic]):
         :param update: Extra values that are not part of the schema.
         :return: Updated User object.
         """
-        extra_data: dict[str, Any] = dict(update or {})
+        extra_data: dict[str, object] = dict(update or {})
         if obj_in.password:
             extra_data["hashed_password"] = self._security.get_password_hash(password=obj_in.password)
         # The plain password must never reach the model
-        user_data: dict[str, Any] = obj_in.model_dump(exclude_unset=True, exclude={"password"})
+        user_data: dict[str, object] = obj_in.model_dump(exclude_unset=True, exclude={"password"})
         db_obj.sqlmodel_update(obj=user_data, update=extra_data)
         self._session.add(instance=db_obj)
         await self._session.commit()

@@ -2,6 +2,7 @@
 
 from uuid import UUID
 
+from sqlmodel import col
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.crud.base import BaseCRUD
@@ -40,4 +41,4 @@ class ItemCRUD(BaseCRUD[Item, ItemCreate, ItemUpdate, ItemPublic, ItemsPublic]):
         :param limit: The maximum number of items to return.
         :return: An ItemsPublic object containing a list of items and the total count of items.
         """
-        return await self._execute_paginated_select(where=[Item.owner_id == owner_id], skip=skip, limit=limit)
+        return await self._execute_paginated_select(where=[col(Item.owner_id) == owner_id], skip=skip, limit=limit)

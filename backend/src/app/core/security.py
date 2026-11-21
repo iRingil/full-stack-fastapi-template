@@ -2,7 +2,7 @@
 
 from datetime import UTC, datetime, timedelta
 from functools import lru_cache
-from typing import Any, ClassVar
+from typing import ClassVar
 
 import bcrypt
 import jwt
@@ -27,16 +27,16 @@ class SecurityManager:
         """
         self._settings: Settings = settings
 
-    def create_access_token(self, subject: Any, expires_delta: timedelta) -> str:
+    def create_access_token(self, subject: str, expires_delta: timedelta) -> str:
         """
         Creates a new JWT access token.
 
-        :param subject: The subject of the token (e.g., user ID).
+        :param subject: The subject of the token (the user ID).
         :param expires_delta: The lifespan of the token.
         :return: The encoded JWT token as a string.
         """
         expire: datetime = datetime.now(tz=UTC) + expires_delta
-        to_encode: dict[str, Any] = {"exp": expire, "sub": str(subject)}
+        to_encode: dict[str, datetime | str] = {"exp": expire, "sub": subject}
         return jwt.encode(payload=to_encode, key=self._settings.SECRET_KEY.get_secret_value(), algorithm=self.ALGORITHM)
 
     def _encode_password(self, password: str) -> bytes:

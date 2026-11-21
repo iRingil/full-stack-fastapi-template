@@ -2,11 +2,11 @@
 
 from collections.abc import AsyncGenerator
 from time import monotonic
-from typing import Annotated, Any
+from typing import Annotated
 from uuid import UUID
 
 import jwt
-from fastapi import Depends, HTTPException, Request, status
+from fastapi import Depends, HTTPException, Request, params, status
 from fastapi.security import OAuth2PasswordBearer
 from jwt.exceptions import InvalidTokenError
 from sqlmodel.ext.asyncio.session import AsyncSession
@@ -77,17 +77,24 @@ def _decode_user_id_from_token(*, token: str, settings: Settings, security_manag
     :return: The UUID of the user.
     :raises HTTPException: 401 if the token is invalid or cannot be decoded.
     """
+    credentials_error: HTTPException = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
     try:
-        payload: dict[str, Any] = jwt.decode(
+        payload: dict[str, object] = jwt.decode(
             jwt=token, key=settings.SECRET_KEY.get_secret_value(), algorithms=[security_manager.ALGORITHM]
         )
-        return UUID(hex=payload["sub"])
-    except (InvalidTokenError, KeyError, TypeError, ValueError) as exc:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Could not validate credentials",
-            headers={"WWW-Authenticate": "Bearer"},
-        ) from exc
+    except InvalidTokenError as exc:
+        raise credentials_error from exc
+    subject: object = payload.get("sub")
+    if not isinstance(subject, str):
+        raise credentials_error
+    try:
+        return UUID(hex=subject)
+    except ValueError as exc:
+        raise credentials_error from exc
 
 
 # 4. Class-based dependencies (providers)
@@ -239,4 +246,5 @@ class ResendVerificationRateLimiterProvider:
 CurrentUser = Annotated[User, Depends(CurrentUserProvider())]
 CurrentSuperuser = Annotated[User, Depends(ActiveSuperuserProvider())]
 OptionalCurrentUser = Annotated[User | None, Depends(OptionalCurrentUserProvider())]
-ResendVerificationRateLimiter = Depends(ResendVerificationRateLimiterProvider())
+# A dependency object for 'dependencies=[...]' of a route; fastapi.Depends() would be typed as Any
+ResendVerificationRateLimiter: params.Depends = params.Depends(dependency=ResendVerificationRateLimiterProvider())

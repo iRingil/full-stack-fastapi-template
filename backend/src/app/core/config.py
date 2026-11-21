@@ -2,13 +2,15 @@
 
 from functools import lru_cache
 from pathlib import Path
-from typing import Annotated, Literal, Self
+from typing import Annotated, ClassVar, Final, Literal, Self
 from warnings import warn
 
 from pydantic import AnyUrl, BeforeValidator, EmailStr, Field, SecretStr, computed_field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 __all__: tuple[str, ...] = ("Settings", "get_settings")
+
+_DEFAULT_ENV_FILE: Final[Path] = Path(__file__).resolve().parents[2] / ".env"
 
 
 class Settings(BaseSettings):
@@ -17,7 +19,7 @@ class Settings(BaseSettings):
     # Common parameters
     PROJECT_NAME: str
     BASE_DIR: Path = Path(__file__).resolve().parents[2]
-    model_config = SettingsConfigDict(env_ignore_empty=True, extra="ignore")
+    model_config: ClassVar[SettingsConfigDict] = SettingsConfigDict(env_ignore_empty=True, extra="ignore")
     ENVIRONMENT: Literal["local", "staging", "production"] = "local"
 
     # Secrets
@@ -34,17 +36,16 @@ class Settings(BaseSettings):
         """
         Helper to parse a comma-separated string into a list of strings.
 
-        :param v: List of strings or comma-separated string.
+        Any other value is returned as is: the field validation then accepts a list or a JSON list string.
+
+        :param v: List of strings, a JSON list or a comma-separated string.
         :return: List of strings or original value.
-        :raises ValueError: If the value is neither a string nor a list.
         """
         if isinstance(v, str) and not v.startswith("["):
             return [i.strip() for i in v.split(",")]
-        if isinstance(v, (list, str)):
-            return v
-        raise ValueError(v)
+        return v
 
-    @computed_field  # type: ignore[prop-decorator]
+    @computed_field
     @property
     def all_cors_origins(self) -> list[str]:
         """
@@ -99,10 +100,11 @@ class Settings(BaseSettings):
         :return: The instance of the model.
         """
         if not self.EMAILS_FROM_NAME:
-            self.EMAILS_FROM_NAME = self.PROJECT_NAME
+            # Settings fields are upper-case env names, not constants
+            self.EMAILS_FROM_NAME = self.PROJECT_NAME  # pyright: ignore[reportConstantRedefinition]
         return self
 
-    @computed_field  # type: ignore[prop-decorator]
+    @computed_field
     @property
     def emails_enabled(self) -> bool:
         """
@@ -143,11 +145,12 @@ class Settings(BaseSettings):
 
 
 @lru_cache(maxsize=1)
-def get_settings(env_file: Path = Path(__file__).resolve().parents[2] / ".env") -> Settings:
+def get_settings(env_file: Path = _DEFAULT_ENV_FILE) -> Settings:
     """
     Returns the Settings object. The lru_cache decorator ensures this function is only called once.
 
     :param env_file: Path to the .env file. Defaults to the standard .env location.
     :return: Settings object.
     """
-    return Settings(_env_file=env_file)  # type: ignore[call-arg]
+    # The required fields come from the environment, and _env_file is a pydantic-settings init option
+    return Settings(_env_file=env_file)  # pyright: ignore[reportCallIssue]

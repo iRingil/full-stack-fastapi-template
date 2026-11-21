@@ -2,7 +2,6 @@
 
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from typing import Any
 
 from fastapi import FastAPI
 from fastapi.routing import APIRoute
@@ -34,23 +33,18 @@ class AppFactory:
             log_dir=self._settings.BASE_DIR / "logs",
             project_name=self._settings.PROJECT_NAME,
         )
-        # Creating a dictionary with parameters for FastAPI
-        fastapi_params: dict[str, Any] = {
-            "title": self._settings.PROJECT_NAME,
-            "generate_unique_id_function": self._custom_generate_unique_id,
-            "lifespan": self._lifespan,
-        }
-        # If the environment is not local, disable documentation
-        if self._settings.ENVIRONMENT != "local":
-            fastapi_params["openapi_url"] = None
-            fastapi_params["docs_url"] = None
-            fastapi_params["redoc_url"] = None
-            fastapi_params["swagger_ui_oauth2_redirect_url"] = None
-        else:
-            fastapi_params["debug"] = True
-            fastapi_params["openapi_url"] = f"{self._settings.API_V1_STR}/openapi.json"
-        # Create a FastAPI instance by unpacking the parameter dictionary
-        self.app: FastAPI = FastAPI(**fastapi_params)
+        # Documentation and debug mode exist only in the local environment
+        is_local: bool = self._settings.ENVIRONMENT == "local"
+        self.app: FastAPI = FastAPI(
+            title=self._settings.PROJECT_NAME,
+            generate_unique_id_function=self._custom_generate_unique_id,
+            lifespan=self._lifespan,
+            debug=is_local,
+            openapi_url=f"{self._settings.API_V1_STR}/openapi.json" if is_local else None,
+            docs_url="/docs" if is_local else None,
+            redoc_url="/redoc" if is_local else None,
+            swagger_ui_oauth2_redirect_url="/docs/oauth2-redirect" if is_local else None,
+        )
         # Use the MiddlewareConfigurator to add all middleware
         MiddlewareConfigurator(app=self.app, settings=self._settings, db_manager=self._db_manager).add_all_middleware()
         self._include_routers()

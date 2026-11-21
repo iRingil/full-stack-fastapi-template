@@ -6,7 +6,6 @@ from pydantic import BaseModel, EmailStr
 from pydantic import Field as PydanticField
 from sqlmodel import Field, Relationship, SQLModel
 
-
 __all__: tuple[str, ...] = (
     "Item",
     "ItemBase",
@@ -53,7 +52,7 @@ class UserBase(SQLModel):
 # Properties to receive via API on creation
 class UserCreate(UserBase):
     """
-    Model for creating a new user via API
+    Model for creating a new user via API.
 
     :param password: Password of the user.
     """
@@ -84,7 +83,8 @@ class UserUpdate(UserBase):
     :param password: Password of the user (optional).
     """
 
-    email: EmailStr | None = Field(default=None, max_length=255)
+    # Update schemas make the base fields optional (the SQLModel pattern)
+    email: EmailStr | None = Field(default=None, max_length=255)  # pyright: ignore[reportIncompatibleVariableOverride]
     password: str | None = Field(default=None, min_length=8, max_length=40)
 
 
@@ -124,7 +124,8 @@ class User(UserBase, table=True):
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     hashed_password: str
-    items: list["Item"] = Relationship(back_populates="owner", cascade_delete=True)
+    # sqlmodel types Relationship() as Any; the annotation gives the real type
+    items: list["Item"] = Relationship(back_populates="owner", cascade_delete=True)  # pyright: ignore[reportAny]
 
 
 # Properties to return via API, id is always required
@@ -176,7 +177,8 @@ class ItemUpdate(ItemBase):
     :param title: Title of the product (optional).
     """
 
-    title: str | None = Field(default=None, min_length=1, max_length=255)
+    # Update schemas make the base fields optional (the SQLModel pattern)
+    title: str | None = Field(default=None, min_length=1, max_length=255)  # pyright: ignore[reportIncompatibleVariableOverride]
 
 
 # Database model, database table inferred from class name
@@ -191,7 +193,8 @@ class Item(ItemBase, table=True):
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     owner_id: UUID = Field(foreign_key="user.id", nullable=False)
-    owner: User | None = Relationship(back_populates="items")
+    # sqlmodel types Relationship() as Any; the annotation gives the real type
+    owner: User | None = Relationship(back_populates="items")  # pyright: ignore[reportAny]
 
 
 # Properties to return via API, id is always required
@@ -240,7 +243,7 @@ class Token(BaseModel):
     """
 
     access_token: str
-    token_type: str = "bearer"
+    token_type: str = "bearer"  # noqa: S105 - the OAuth2 token type, not a password
 
 
 class NewPassword(BaseModel):

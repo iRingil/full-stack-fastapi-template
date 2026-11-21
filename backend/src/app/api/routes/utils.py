@@ -20,12 +20,15 @@ class UtilsRouter:
     @utils_router.post(
         path="/test-email/",
         status_code=202,
-        response_model=Message,
         summary="Test emails",
         description="Send a test email.",
     )
     async def test_email(
-        self, email_to: EmailStr, background_tasks: BackgroundTasks, email_manager: EmailManagerDep, _: CurrentSuperuser
+        self,
+        email_to: EmailStr,
+        background_tasks: BackgroundTasks,
+        email_manager: EmailManagerDep,
+        _: CurrentSuperuser,  # noqa: PT019 - a route, not a pytest test: Ruff goes by the name test_*
     ) -> Message:
         """
         Endpoint for testing the email system.
@@ -40,9 +43,7 @@ class UtilsRouter:
         background_tasks.add_task(email_manager.send_test_email, email_to=email_to)
         return Message(message="Test email sent")
 
-    @utils_router.get(
-        path="/health-check/", response_model=Message, summary="Health check", description="Health check."
-    )
+    @utils_router.get(path="/health-check/", summary="Health check", description="Health check.")
     async def health_check(self) -> Message:
         """
         Simple health check endpoint.

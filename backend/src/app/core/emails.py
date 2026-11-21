@@ -2,14 +2,14 @@
 
 from datetime import UTC, datetime, timedelta
 from functools import lru_cache
-from typing import Any, ClassVar, Literal
+from typing import ClassVar, Literal
 
 import jwt
 from fastapi_mail import ConnectionConfig, FastMail, MessageSchema, MessageType
 from jinja2 import Environment, FileSystemLoader, Template, select_autoescape
 from jwt.exceptions import InvalidTokenError
 from loguru import logger
-from pydantic import NameEmail
+from pydantic import NameEmail, SecretStr
 
 from app.core.config import Settings, get_settings
 from app.core.security import SecurityManager, get_security_manager
@@ -18,6 +18,7 @@ __all__: tuple[str, ...] = ("EmailManager", "get_email_manager")
 
 
 type TokenPurpose = Literal["password_reset", "email_verify"]
+type TemplateContext = dict[str, str | int]
 
 
 class EmailManager:
@@ -36,15 +37,18 @@ class EmailManager:
         self._settings: Settings = settings
         self._security_manager: SecurityManager = security_manager
         self._fm: FastMail | None = None
-        if self._settings.emails_enabled:
+        # The same condition as Settings.emails_enabled, spelled out so that the values are known to be set
+        smtp_host: str | None = self._settings.SMTP_HOST
+        emails_from: str | None = self._settings.EMAILS_FROM_EMAIL
+        if smtp_host and emails_from:
             self._fm = FastMail(
                 config=ConnectionConfig(
                     MAIL_USERNAME=self._settings.SMTP_USER or "",
-                    MAIL_PASSWORD=self._settings.SMTP_PASSWORD or "",
-                    MAIL_FROM=self._settings.EMAILS_FROM_EMAIL,
+                    MAIL_PASSWORD=self._settings.SMTP_PASSWORD or SecretStr(""),
+                    MAIL_FROM=emails_from,
                     MAIL_FROM_NAME=self._settings.EMAILS_FROM_NAME,
                     MAIL_PORT=self._settings.SMTP_PORT,
-                    MAIL_SERVER=self._settings.SMTP_HOST,
+                    MAIL_SERVER=smtp_host,
                     MAIL_STARTTLS=self._settings.SMTP_TLS,
                     MAIL_SSL_TLS=self._settings.SMTP_SSL,
                     USE_CREDENTIALS=bool(self._settings.SMTP_USER),
@@ -57,7 +61,7 @@ class EmailManager:
             enable_async=True,
         )
 
-    async def _render_template(self, template_name: str, context: dict[str, Any]) -> str:
+    async def _render_template(self, template_name: str, context: TemplateContext) -> str:
         """
         Asynchronously renders a Jinja2 template into an HTML string.
 
@@ -103,7 +107,7 @@ class EmailManager:
         :return: The encoded JWT token as a string.
         """
         now: datetime = datetime.now(tz=UTC)
-        payload: dict[str, Any] = {
+        payload: dict[str, datetime | float | str] = {
             "exp": (now + expires_delta).timestamp(),
             "nbf": now,
             "sub": email,
@@ -124,7 +128,7 @@ class EmailManager:
         :return: The email address of the user if the token is valid and has this purpose, None otherwise.
         """
         try:
-            decoded_token: dict[str, Any] = jwt.decode(
+            decoded_token: dict[str, object] = jwt.decode(
                 jwt=token,
                 key=self._settings.SECRET_KEY.get_secret_value(),
                 algorithms=[self._security_manager.ALGORITHM],
@@ -133,7 +137,8 @@ class EmailManager:
             return None
         if decoded_token.get(self._PURPOSE_CLAIM) != purpose:
             return None
-        return str(decoded_token["sub"])
+        email: object = decoded_token.get("sub")
+        return email if isinstance(email, str) else None
 
     def generate_password_reset_token(self, email: str) -> str:
         """

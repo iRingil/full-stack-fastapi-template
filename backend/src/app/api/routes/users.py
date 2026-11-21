@@ -1,6 +1,6 @@
 """Module for users endpoints."""
 
-from typing import Annotated, Any
+from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Path, status
@@ -14,9 +14,9 @@ from app.models import (
     UserCreate,
     UserPublic,
     UserRegister,
+    UsersPublic,
     UserUpdate,
     UserUpdateMe,
-    UsersPublic,
 )
 
 __all__: tuple[str, ...] = ("users_router",)
@@ -40,11 +40,10 @@ class UsersRouter:
 
     @users_router.get(
         path="/",
-        response_model=UsersPublic,
         summary="Read Users",
         description="Obtaining a list of users (for superusers only).",
     )
-    async def read_users(self, _: CurrentSuperuser, skip: int = 0, limit: int = 100) -> Any:
+    async def read_users(self, _: CurrentSuperuser, skip: int = 0, limit: int = 100) -> UsersPublic:
         """
         Endpoint to retrieve a list of users. Requires superuser privileges.
 
@@ -148,7 +147,6 @@ class UsersRouter:
 
     @users_router.patch(
         path="/me/password",
-        response_model=Message,
         summary="Update Current User's Password",
         description="Update the current user's password.",
     )
@@ -175,9 +173,7 @@ class UsersRouter:
         await self._user_crud.update(db_obj=current_user, obj_in=UserUpdate(password=body.new_password))
         return Message(message="Password updated successfully")
 
-    @users_router.delete(
-        path="/me", response_model=Message, summary="Delete Current User", description="Delete current user."
-    )
+    @users_router.delete(path="/me", summary="Delete Current User", description="Delete current user.")
     async def delete_user_me(self, current_user: CurrentUser) -> Message:
         """
         Endpoint for the current user to delete their own account together with their items.
@@ -274,7 +270,6 @@ class UsersRouter:
 
     @users_router.delete(
         path="/{id}",
-        response_model=Message,
         summary="Delete User by ID",
         description="Delete a user by their ID (superusers only).",
     )

@@ -1,11 +1,11 @@
 """Generic, reusable CRUD (Create, Read, Update, Delete) base class."""
 
 from collections.abc import Sequence
-from typing import Any
 
 from pydantic import BaseModel
-from sqlalchemy import ColumnElement, Executable, Row, Select, inspect, tuple_
+from sqlalchemy import ColumnElement, tuple_
 from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.orm import Mapper, class_mapper
 from sqlalchemy.sql.functions import count
 from sqlmodel import SQLModel, func, select
 from sqlmodel.ext.asyncio.session import AsyncSession
@@ -50,22 +50,40 @@ class BaseCRUD[
 
     # Helpers
     @property
+    def _mapper(self) -> Mapper[ModelType]:
+        """
+        The ORM mapper of the model.
+
+        :return: The mapper.
+        """
+        return class_mapper(self._model)
+
+    @property
     def _pk_names(self) -> list[str]:
         """
-        Names of the primary key columns of the model.
+        Names of the primary key attributes of the model (the same as the column names in SQLModel).
 
-        :return: A list of column names.
+        :return: A list of attribute names.
         """
-        return [pk.name for pk in inspect(subject=self._model).primary_key]
+        return [self._mapper.get_property_by_column(column=pk).key for pk in self._mapper.primary_key]
 
-    def _pk_clause(self, *, pk_values: Sequence[tuple[Any, ...]]) -> ColumnElement[bool]:
+    def _pk_values(self, *, db_obj: ModelType) -> tuple[object, ...]:
+        """
+        The primary key values of an object.
+
+        :param db_obj: The database object.
+        :return: The values in the order of the primary key columns.
+        """
+        return tuple(self._mapper.primary_key_from_instance(db_obj))
+
+    def _pk_clause(self, *, pk_values: Sequence[tuple[object, ...]]) -> ColumnElement[bool]:
         """
         Builds a WHERE clause matching the given primary keys (composite keys are supported).
 
         :param pk_values: Primary key values, one tuple per object.
         :return: The WHERE clause.
         """
-        return tuple_(*(getattr(self._model, name) for name in self._pk_names)).in_(pk_values)
+        return tuple_(*self._mapper.primary_key).in_(pk_values)
 
     def _to_public(self, *, db_obj: ModelType) -> PublicSchemaType:
         """
@@ -75,28 +93,6 @@ class BaseCRUD[
         :return: The public schema of the object.
         """
         return self._public_schema.model_validate(obj=db_obj, from_attributes=True)
-
-    async def _commit_and_refresh_multi(self, *, stmt: Executable) -> list[ModelType]:
-        """
-        Executes a statement with a RETURNING clause, commits the transaction and re-reads the affected objects.
-
-        :param stmt: The SQLAlchemy executable statement (e.g., Insert) with a returning() clause.
-        :return: A list of the affected database model instances, refreshed from the database.
-        """
-        result = await self._session.exec(statement=stmt)  # type: ignore[call-overload]
-        returned_rows: Sequence[Row[Any]] = result.all()
-        if not returned_rows:
-            await self._session.commit()
-            return []
-        pk_values: list[tuple[Any, ...]] = [
-            tuple(getattr(row[0], name) for name in self._pk_names) for row in returned_rows
-        ]
-        await self._session.commit()
-        # A SEPARATE SELECT on these PKs gives 'refreshed' objects
-        fresh_result = await self._session.exec(
-            statement=select(self._model).where(self._pk_clause(pk_values=pk_values))
-        )
-        return list(fresh_result.all())
 
     async def _execute_paginated_select(
         self, *, where: Sequence[ColumnElement[bool]] = (), skip: int = 0, limit: int = 100
@@ -109,29 +105,26 @@ class BaseCRUD[
         :param limit: The maximum number of objects to return.
         :return: A public list schema with the objects of the page and the total count.
         """
-        stmt: Select[tuple[ModelType, int]] = (
-            select(self._model, count().over().label(name="total_count"))  # type: ignore[call-overload]
+        stmt = (
+            select(self._model, count().over().label(name="total_count"))
             .where(*where)
             .offset(offset=skip)
             .limit(limit=limit)
         )
-        result = await self._session.exec(statement=stmt)  # type: ignore[call-overload]
-        rows: Sequence[Row[tuple[ModelType, int]]] = result.all()
+        rows = (await self._session.exec(statement=stmt)).all()
         if rows:
             total: int = rows[0][1]
         elif skip:
             # A page past the end has no rows to carry the window count, so the total is counted separately
-            total_result = await self._session.exec(
-                statement=select(func.count()).select_from(self._model).where(*where)
-            )
-            total = total_result.one()
+            total_stmt = select(func.count()).select_from(self._model).where(*where)
+            total = (await self._session.exec(statement=total_stmt)).one()
         else:
             total = 0
         items: list[PublicSchemaType] = [self._to_public(db_obj=row[0]) for row in rows]
         return self._public_list_schema(data=items, count=total)
 
     # Read
-    async def get_by_id(self, *, obj_id: Any) -> ModelType | None:
+    async def get_by_id(self, *, obj_id: object) -> ModelType | None:
         """
         Retrieves an object by its primary key.
 
@@ -151,7 +144,7 @@ class BaseCRUD[
         return await self._execute_paginated_select(skip=skip, limit=limit)
 
     # Create
-    async def create(self, *, obj_in: CreateSchemaType, update: dict[str, Any] | None = None) -> ModelType:
+    async def create(self, *, obj_in: CreateSchemaType, update: dict[str, object] | None = None) -> ModelType:
         """
         Creates a new object.
 
@@ -183,7 +176,14 @@ class BaseCRUD[
             .on_conflict_do_nothing(index_elements=index_elements or self._pk_names)
             .returning(self._model)
         )
-        created_objs: list[ModelType] = await self._commit_and_refresh_multi(stmt=stmt)
+        inserted: Sequence[ModelType] = (await self._session.scalars(statement=stmt)).all()
+        pk_values: list[tuple[object, ...]] = [self._pk_values(db_obj=db_obj) for db_obj in inserted]
+        await self._session.commit()
+        if not pk_values:
+            return []
+        # A SEPARATE SELECT on these PKs gives 'refreshed' objects
+        fresh_stmt = select(self._model).where(self._pk_clause(pk_values=pk_values))
+        created_objs: Sequence[ModelType] = (await self._session.exec(statement=fresh_stmt)).all()
         return [self._to_public(db_obj=db_obj) for db_obj in created_objs]
 
     async def batch_insert(self, *, objs_in: list[CreateSchemaType], batch_size: int = 1000) -> int:
@@ -202,7 +202,7 @@ class BaseCRUD[
 
     # Update
     async def update(
-        self, *, db_obj: ModelType, obj_in: UpdateSchemaType, update: dict[str, Any] | None = None
+        self, *, db_obj: ModelType, obj_in: UpdateSchemaType, update: dict[str, object] | None = None
     ) -> ModelType:
         """
         Partially updates an object: only the fields set in obj_in are changed.
@@ -219,7 +219,7 @@ class BaseCRUD[
         return db_obj
 
     # Delete
-    async def delete(self, *, obj_id: Any) -> PublicSchemaType | None:
+    async def delete(self, *, obj_id: object) -> PublicSchemaType | None:
         """
         Deletes an object by its primary key through the ORM, so relationship cascades apply in the same transaction.
 
