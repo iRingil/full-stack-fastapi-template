@@ -176,7 +176,7 @@ class BaseCRUD[
             .on_conflict_do_nothing(index_elements=index_elements or self._pk_names)
             .returning(self._model)
         )
-        inserted: Sequence[ModelType] = (await self._session.scalars(statement=stmt)).all()
+        inserted: Sequence[ModelType] = (await self._session.exec(statement=stmt)).scalars().all()
         pk_values: list[tuple[object, ...]] = [self._pk_values(db_obj=db_obj) for db_obj in inserted]
         await self._session.commit()
         if not pk_values:

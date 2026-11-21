@@ -12,6 +12,7 @@ from loguru import logger
 from pydantic import NameEmail, SecretStr
 
 from app.core.config import Settings, get_settings
+from app.core.log_setup import describe_exception
 from app.core.security import SecurityManager, get_security_manager
 
 __all__: tuple[str, ...] = ("EmailManager", "get_email_manager")
@@ -94,7 +95,7 @@ class EmailManager:
             await self._fm.send_message(message=message)
             logger.info(f"Email sent to {email_to} with subject '{subject}'")
         except Exception as exc:  # noqa: BLE001 - a failed delivery is logged, the caller is not interrupted
-            logger.error(f"Failed to send email to {email_to}. Error: {exc}")
+            logger.error(f"Failed to send email to {email_to}: {describe_exception(exc=exc)}")
 
     # Tokens
     def _generate_token(self, *, email: str, purpose: TokenPurpose, expires_delta: timedelta) -> str:
