@@ -12,6 +12,7 @@ from loguru import logger
 from pydantic import NameEmail, SecretStr
 
 from app.core.config import Settings, get_settings
+from app.core.constants import BASE_DIR
 from app.core.log_setup import describe_exception
 from app.core.security import SecurityManager, get_security_manager
 
@@ -39,25 +40,25 @@ class EmailManager:
         self._security_manager: SecurityManager = security_manager
         self._fm: FastMail | None = None
         # The same condition as Settings.emails_enabled, spelled out so that the values are known to be set
-        smtp_host: str | None = self._settings.SMTP_HOST
-        emails_from: str | None = self._settings.EMAILS_FROM_EMAIL
+        smtp_host: str | None = self._settings.smtp.host
+        emails_from: str | None = self._settings.email.from_email
         if smtp_host and emails_from:
             self._fm = FastMail(
                 config=ConnectionConfig(
-                    MAIL_USERNAME=self._settings.SMTP_USER or "",
-                    MAIL_PASSWORD=self._settings.SMTP_PASSWORD or SecretStr(""),
+                    MAIL_USERNAME=self._settings.smtp.user or "",
+                    MAIL_PASSWORD=self._settings.smtp.password or SecretStr(""),
                     MAIL_FROM=emails_from,
-                    MAIL_FROM_NAME=self._settings.EMAILS_FROM_NAME,
-                    MAIL_PORT=self._settings.SMTP_PORT,
+                    MAIL_FROM_NAME=self._settings.email.from_name,
+                    MAIL_PORT=self._settings.smtp.port,
                     MAIL_SERVER=smtp_host,
-                    MAIL_STARTTLS=self._settings.SMTP_TLS,
-                    MAIL_SSL_TLS=self._settings.SMTP_SSL,
-                    USE_CREDENTIALS=bool(self._settings.SMTP_USER),
+                    MAIL_STARTTLS=self._settings.smtp.tls,
+                    MAIL_SSL_TLS=self._settings.smtp.ssl,
+                    USE_CREDENTIALS=bool(self._settings.smtp.user),
                     VALIDATE_CERTS=True,
                 )
             )
         self._jinja_env: Environment = Environment(
-            loader=FileSystemLoader(searchpath=self._settings.BASE_DIR / "app" / "email-templates" / "build"),
+            loader=FileSystemLoader(searchpath=BASE_DIR / "app" / "email-templates" / "build"),
             autoescape=select_autoescape(enabled_extensions=["html", "xml"]),
             enable_async=True,
         )
@@ -116,7 +117,7 @@ class EmailManager:
         }
         return jwt.encode(
             payload=payload,
-            key=self._settings.SECRET_KEY.get_secret_value(),
+            key=self._settings.security.secret_key.get_secret_value(),
             algorithm=self._security_manager.ALGORITHM,
         )
 
@@ -131,7 +132,7 @@ class EmailManager:
         try:
             decoded_token: dict[str, object] = jwt.decode(
                 jwt=token,
-                key=self._settings.SECRET_KEY.get_secret_value(),
+                key=self._settings.security.secret_key.get_secret_value(),
                 algorithms=[self._security_manager.ALGORITHM],
             )
         except InvalidTokenError:
@@ -148,7 +149,7 @@ class EmailManager:
         :param email: The email address of the user.
         :return: The encoded JWT token as a string.
         """
-        delta: timedelta = timedelta(hours=self._settings.EMAIL_RESET_TOKEN_EXPIRE_HOURS)
+        delta: timedelta = timedelta(hours=self._settings.security.email_reset_token_expire_hours)
         return self._generate_token(email=email, purpose="password_reset", expires_delta=delta)
 
     def verify_password_reset_token(self, token: str) -> str | None:
@@ -167,7 +168,7 @@ class EmailManager:
         :param email: The email address of the user.
         :return: The encoded JWT token as a string.
         """
-        delta: timedelta = timedelta(hours=self._settings.EMAIL_VERIFY_TOKEN_EXPIRE_HOURS)
+        delta: timedelta = timedelta(hours=self._settings.security.email_verify_token_expire_hours)
         return self._generate_token(email=email, purpose="email_verify", expires_delta=delta)
 
     def verify_email_verify_token(self, token: str) -> str | None:
@@ -187,10 +188,10 @@ class EmailManager:
         :param email_to: The email address of the recipient.
         :return: None
         """
-        subject: str = f"{self._settings.PROJECT_NAME} - Test email"
+        subject: str = f"{self._settings.app.project_name} - Test email"
         html_content: str = await self._render_template(
             template_name="test_email.html",
-            context={"project_name": self._settings.PROJECT_NAME, "email": email_to},
+            context={"project_name": self._settings.app.project_name, "email": email_to},
         )
         await self._send_email(email_to=email_to, subject=subject, html_content=html_content)
 
@@ -201,16 +202,16 @@ class EmailManager:
         :param email_to: The email address of the recipient.
         :return: The subject and the HTML content of the email.
         """
-        subject: str = f"{self._settings.PROJECT_NAME} - Password recovery for user {email_to}"
+        subject: str = f"{self._settings.app.project_name} - Password recovery for user {email_to}"
         token: str = self.generate_password_reset_token(email=email_to)
         html_content: str = await self._render_template(
             template_name="reset_password.html",
             context={
-                "project_name": self._settings.PROJECT_NAME,
+                "project_name": self._settings.app.project_name,
                 "username": email_to,
                 "email": email_to,
-                "valid_hours": self._settings.EMAIL_RESET_TOKEN_EXPIRE_HOURS,
-                "link": f"{self._settings.FRONTEND_HOST}/reset-password?token={token}",
+                "valid_hours": self._settings.security.email_reset_token_expire_hours,
+                "link": f"{self._settings.app.frontend_url}/reset-password?token={token}",
             },
         )
         return subject, html_content
@@ -237,15 +238,15 @@ class EmailManager:
         :param template_name: The name of the HTML template file to use.
         :return: None
         """
-        subject: str = f"{self._settings.PROJECT_NAME} - {subject_text}"
+        subject: str = f"{self._settings.app.project_name} - {subject_text}"
         token: str = self.generate_email_verify_token(email=email_to)
         html_content: str = await self._render_template(
             template_name=template_name,
             context={
-                "project_name": self._settings.PROJECT_NAME,
+                "project_name": self._settings.app.project_name,
                 "username": username,
-                "valid_hours": self._settings.EMAIL_VERIFY_TOKEN_EXPIRE_HOURS,
-                "link": f"{self._settings.FRONTEND_HOST}/verify-email?token={token}",
+                "valid_hours": self._settings.security.email_verify_token_expire_hours,
+                "link": f"{self._settings.app.frontend_url}/verify-email?token={token}",
             },
         )
         await self._send_email(email_to=email_to, subject=subject, html_content=html_content)

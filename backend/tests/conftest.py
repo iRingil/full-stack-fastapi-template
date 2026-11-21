@@ -5,8 +5,8 @@ The database fixtures connect to the throwaway test PostgreSQL: locally the WSL 
 service container, both with the same credentials. 127.0.0.1, never localhost: localhost resolves to ::1 first,
 and the WSL port relay is IPv4 only.
 
-The environment variables are set before the application is imported: app.api.deps reads the settings at import
-time, and environment variables take precedence over a developer's own backend/src/.env.
+The settings come only from the environment variables below: the settings groups do not read any .env file in the
+tests, so a developer's own backend/src/.env never leaks in.
 """
 
 # ruff: noqa: E402, S101, S105, SLF001
@@ -37,13 +37,23 @@ import bcrypt
 import pytest
 from httpx import ASGITransport, AsyncClient
 from loguru import logger
+from pydantic import BaseModel
 from sqlmodel import SQLModel
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 import app.app_factory as app_factory  # noqa: PLR0402 - for basedpyright 'from app import' means the tests' own app package
 from app.api.deps import ResendVerificationRateLimiter, ResendVerificationRateLimiterProvider
 from app.app_factory import AppFactory
-from app.core.config import Settings, get_settings
+from app.core.config import (
+    AppSettings,
+    EmailSettings,
+    PostgresSettings,
+    SecuritySettings,
+    Settings,
+    SmtpSettings,
+    SuperuserSettings,
+    get_settings,
+)
 from app.core.db import DatabaseManager, get_db_manager
 from app.core.emails import EmailManager, get_email_manager
 from app.core.security import SecurityManager, get_security_manager
@@ -53,11 +63,28 @@ from app.models import Item, ItemCreate, User, UserCreate
 
 __all__: tuple[str, ...] = ()
 
+for _group in (AppSettings, SecuritySettings, SuperuserSettings, PostgresSettings, SmtpSettings, EmailSettings):
+    _group.model_config["env_file"] = None
+
 type UserFactory = Callable[..., Coroutine[None, None, User]]
 type ItemFactory = Callable[..., Coroutine[None, None, Item]]
 type AuthHeaders = Callable[[User], dict[str, str]]
 
 USER_PASSWORD: str = "user-password"
+
+
+def with_settings(*, settings: Settings, group: str, **values: object) -> Settings:
+    """
+    A copy of the settings with some fields of one group replaced (without validation, as model_copy does).
+
+    :param settings: The settings to copy.
+    :param group: The name of the group: app, security, superuser, postgres, smtp or email.
+    :param values: The new field values of the group.
+    :return: The copy.
+    """
+    current: object = getattr(settings, group)
+    assert isinstance(current, BaseModel)
+    return settings.model_copy(update={group: current.model_copy(update=values)})
 
 
 @pytest.fixture(autouse=True)
@@ -75,11 +102,11 @@ def fast_bcrypt(monkeypatch: pytest.MonkeyPatch) -> None:
 @pytest.fixture(name="settings")
 def settings_fixture() -> Settings:
     """
-    The settings of the test suite, independent of any .env file.
+    The settings of the test suite, from _TEST_ENV only.
 
     :return: The settings.
     """
-    return Settings(_env_file=None)  # pyright: ignore[reportCallIssue] - the fields come from _TEST_ENV
+    return Settings()
 
 
 @pytest.fixture(name="security_manager")
@@ -104,8 +131,10 @@ def email_manager_fixture(settings: Settings, security_manager: SecurityManager)
     :param security_manager: The test security manager.
     :return: The email manager.
     """
-    smtp_settings: Settings = settings.model_copy(
-        update={"SMTP_HOST": "smtp.example.com", "EMAILS_FROM_EMAIL": "noreply@example.com"}
+    smtp_settings: Settings = with_settings(
+        settings=with_settings(settings=settings, group="smtp", host="smtp.example.com"),
+        group="email",
+        from_email="noreply@example.com",
     )
     email_manager: EmailManager = EmailManager(settings=smtp_settings, security_manager=security_manager)
     assert email_manager._fm is not None

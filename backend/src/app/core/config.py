@@ -1,156 +1,247 @@
-"""Configuration for the application."""
+"""
+Configuration of a deployment, read from the environment and the .env file.
 
+The settings are split into groups, one BaseSettings class each, with the prefix of their environment variables.
+A field without a default must be set in the environment (secrets and server-specific values); a field with a
+default may be overridden but rarely needs to be. Values defined by the code are constants (app.core.constants).
+"""
+
+import re
 from functools import lru_cache
+from ipaddress import ip_address
 from pathlib import Path
-from typing import Annotated, ClassVar, Final, Literal, Self
-from warnings import warn
+from typing import Annotated, ClassVar, Literal, Self
 
-from pydantic import AnyUrl, BeforeValidator, EmailStr, Field, SecretStr, computed_field, model_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import (
+    AfterValidator,
+    AnyHttpUrl,
+    BaseModel,
+    BeforeValidator,
+    EmailStr,
+    Field,
+    HttpUrl,
+    PositiveInt,
+    SecretStr,
+    TypeAdapter,
+    model_validator,
+)
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
-__all__: tuple[str, ...] = ("Settings", "get_settings")
+from app.core.constants import ENV_FILE
 
-_DEFAULT_ENV_FILE: Final[Path] = Path(__file__).resolve().parents[2] / ".env"
+__all__: tuple[str, ...] = (
+    "AppSettings",
+    "EmailSettings",
+    "PostgresSettings",
+    "SecuritySettings",
+    "Settings",
+    "SmtpSettings",
+    "SuperuserSettings",
+    "get_settings",
+)
+
+_STRING_LIST: TypeAdapter[list[str]] = TypeAdapter(list[str])
+# A host name by RFC 1123: dot-separated labels of letters, digits and inner hyphens, at most 253 characters
+_HOSTNAME: re.Pattern[str] = re.compile(
+    r"(?=.{1,253}$)(?!-)[a-z0-9-]{1,63}(?<!-)(\.(?!-)[a-z0-9-]{1,63}(?<!-))*", re.IGNORECASE
+)
 
 
-class Settings(BaseSettings):
-    """Class for application settings."""
+def _validate_host(value: str) -> str:
+    """
+    Accepts an IPv4 address, an IPv6 address or a host name.
 
-    # Common parameters
-    PROJECT_NAME: str
-    BASE_DIR: Path = Path(__file__).resolve().parents[2]
-    model_config: ClassVar[SettingsConfigDict] = SettingsConfigDict(env_ignore_empty=True, extra="ignore")
-    ENVIRONMENT: Literal["local", "staging", "production"] = "local"
+    :param value: The host.
+    :return: The host unchanged.
+    :raises ValueError: If the value is neither an IP address nor a valid host name.
+    """
+    try:
+        ip_address(value)
+    except ValueError:
+        if not _HOSTNAME.fullmatch(value):
+            raise ValueError(f"'{value}' is neither an IP address nor a valid host name") from None
+    return value
 
-    # Secrets
-    SECRET_KEY: SecretStr
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 8  # 60 minutes * 24 hours * 8 days = 8 days
 
-    # Admin user
-    FIRST_SUPERUSER: EmailStr
-    FIRST_SUPERUSER_PASSWORD: SecretStr
+def _parse_cors(value: list[str] | str) -> list[str]:
+    """
+    Parses the CORS origins: a JSON list or a comma-separated string (a list is taken as is).
 
-    # CORS
-    @staticmethod
-    def _parse_cors(v: list[str] | str) -> list[str] | str:
+    :param value: List of strings, a JSON list string or a comma-separated string.
+    :return: List of strings.
+    """
+    if isinstance(value, list):
+        return value
+    if value.startswith("["):
+        return _STRING_LIST.validate_json(value)
+    return [item.strip() for item in value.split(",")]
+
+
+type Host = Annotated[str, AfterValidator(_validate_host)]
+type Port = Annotated[int, Field(gt=0, le=65535)]
+
+
+def _config(prefix: str) -> SettingsConfigDict:
+    """
+    The configuration shared by all settings groups.
+
+    :param prefix: The prefix of the group's environment variables.
+    :return: The configuration.
+    """
+    return SettingsConfigDict(env_prefix=prefix, env_file=ENV_FILE, env_ignore_empty=True, extra="ignore")
+
+
+class AppSettings(BaseSettings):
+    """The deployment itself: its name, environment and the frontend it serves."""
+
+    model_config: ClassVar[SettingsConfigDict] = _config(prefix="")
+
+    project_name: str
+    environment: Literal["local", "staging", "production"] = "local"
+    frontend_host: HttpUrl = HttpUrl("http://localhost:5173")
+    # NoDecode: the raw string goes to _parse_cors, which also takes a comma-separated list, not only JSON
+    backend_cors_origins: Annotated[list[AnyHttpUrl], NoDecode, BeforeValidator(_parse_cors)] = []
+
+    @property
+    def frontend_url(self) -> str:
         """
-        Helper to parse a comma-separated string into a list of strings.
+        The frontend address without a trailing slash, to build links from.
 
-        Any other value is returned as is: the field validation then accepts a list or a JSON list string.
-
-        :param v: List of strings, a JSON list or a comma-separated string.
-        :return: List of strings or original value.
+        :return: The address.
         """
-        if isinstance(v, str) and not v.startswith("["):
-            return [i.strip() for i in v.split(",")]
-        return v
+        return str(self.frontend_host).rstrip("/")
 
-    @computed_field
     @property
     def all_cors_origins(self) -> list[str]:
         """
-        Constructs a list of all CORS origins, including backend and frontend hosts.
+        All CORS origins: the configured ones and the frontend, without trailing slashes.
 
-        :return: A list of strings representing the origins allowed for CORS.
+        :return: The origins.
         """
-        return [str(origin).rstrip("/") for origin in self.BACKEND_CORS_ORIGINS] + [self.FRONTEND_HOST]
+        return [str(origin).rstrip("/") for origin in self.backend_cors_origins] + [self.frontend_url]
 
-    API_V1_STR: str = "/api/v1"
-    FRONTEND_HOST: str = "http://localhost:5173"
-    BACKEND_CORS_ORIGINS: Annotated[list[AnyUrl] | str, BeforeValidator(_parse_cors)] = []
 
-    # Postgres database
-    POSTGRES_SERVER: str
-    POSTGRES_PORT: int = Field(default=5432, gt=0, le=65535)
-    POSTGRES_SOCKET: str | None = None
-    POSTGRES_USER: str
-    POSTGRES_PASSWORD: SecretStr = SecretStr("")
-    POSTGRES_DB: str = ""
+class SecuritySettings(BaseSettings):
+    """The signing key and the lifetimes of the tokens."""
 
-    # Email
-    SMTP_TLS: bool = True
-    SMTP_SSL: bool = False
-    SMTP_PORT: int = Field(default=587, gt=0, le=65535)
-    SMTP_HOST: str | None = None
-    SMTP_USER: str | None = None
-    SMTP_PASSWORD: SecretStr | None = None
-    EMAILS_FROM_EMAIL: EmailStr | None = None
-    EMAILS_FROM_NAME: str | None = None
-    EMAIL_RESET_TOKEN_EXPIRE_HOURS: int = 48
-    EMAIL_VERIFY_TOKEN_EXPIRE_HOURS: int = 24
-    EMAIL_TEST_USER: EmailStr = "test@example.com"
+    model_config: ClassVar[SettingsConfigDict] = _config(prefix="")
+
+    secret_key: SecretStr = Field(min_length=32)  # HS256 needs at least 32 bytes
+    access_token_expire_minutes: PositiveInt = 60 * 24 * 8  # 8 days
+    email_reset_token_expire_hours: PositiveInt = 48
+    email_verify_token_expire_hours: PositiveInt = 24
+
+
+class SuperuserSettings(BaseSettings):
+    """The first superuser, created by app.initial_data."""
+
+    model_config: ClassVar[SettingsConfigDict] = _config(prefix="FIRST_SUPERUSER_")
+
+    email: EmailStr = Field(validation_alias="FIRST_SUPERUSER")
+    password: SecretStr = Field(min_length=8, max_length=40)  # the limits of a user password
+
+
+class PostgresSettings(BaseSettings):
+    """The connection to PostgreSQL: host and port, or a Unix socket in production."""
+
+    model_config: ClassVar[SettingsConfigDict] = _config(prefix="POSTGRES_")
+
+    server: Host
+    port: Port = 5432
+    socket: Path | None = None
+    user: str
+    password: SecretStr | None = None
+    db: str
+
+
+class SmtpSettings(BaseSettings):
+    """The SMTP server; without a host emails are not sent."""
+
+    model_config: ClassVar[SettingsConfigDict] = _config(prefix="SMTP_")
+
+    host: Host | None = None
+    port: Port = 587
+    user: str | None = None
+    password: SecretStr | None = None
+    tls: bool = True
+    ssl: bool = False
 
     @model_validator(mode="after")
-    def _validate_smtp_tls_ssl(self) -> Self:
+    def _validate_tls_ssl(self) -> Self:
         """
-        Ensures SMTP_TLS and SMTP_SSL are not both enabled simultaneously.
+        Ensures STARTTLS and SSL are not both enabled.
 
         :return: The instance of the model.
-        :raises ValueError: If both SMTP_TLS and SMTP_SSL are True.
+        :raises ValueError: If both tls and ssl are True.
         """
-        if self.SMTP_TLS and self.SMTP_SSL:
+        if self.tls and self.ssl:
             raise ValueError("SMTP_TLS and SMTP_SSL cannot both be True.")
         return self
 
+
+class EmailSettings(BaseSettings):
+    """The sender of the emails; without an address emails are not sent."""
+
+    model_config: ClassVar[SettingsConfigDict] = _config(prefix="EMAILS_")
+
+    from_email: EmailStr | None = None
+    from_name: str | None = None  # the project name by default
+
+
+def _load[T: BaseSettings](cls: type[T]) -> T:
+    """
+    Reads a settings group from the environment and the .env file.
+
+    Called through the BaseSettings signature, where every argument is optional: the required fields of a group
+    come from the environment, which static analysis cannot know.
+
+    :param cls: The settings group.
+    :return: The settings.
+    """
+    return cls()
+
+
+class Settings(BaseModel):
+    """
+    All settings of a deployment, by group.
+
+    A plain model: each group reads its own environment variables, the whole reads none (it would otherwise take
+    variables named like the groups, APP or EMAIL, for JSON).
+    """
+
+    app: AppSettings = Field(default_factory=lambda: _load(cls=AppSettings))
+    security: SecuritySettings = Field(default_factory=lambda: _load(cls=SecuritySettings))
+    superuser: SuperuserSettings = Field(default_factory=lambda: _load(cls=SuperuserSettings))
+    postgres: PostgresSettings = Field(default_factory=lambda: _load(cls=PostgresSettings))
+    smtp: SmtpSettings = Field(default_factory=lambda: _load(cls=SmtpSettings))
+    email: EmailSettings = Field(default_factory=lambda: _load(cls=EmailSettings))
+
     @model_validator(mode="after")
-    def _set_default_emails_from(self) -> Self:
+    def _set_default_sender_name(self) -> Self:
         """
-        Sets default value for EMAILS_FROM_NAME if it is not set.
+        Names the sender after the project when no name is set.
 
         :return: The instance of the model.
         """
-        if not self.EMAILS_FROM_NAME:
-            # Settings fields are upper-case env names, not constants
-            self.EMAILS_FROM_NAME = self.PROJECT_NAME  # pyright: ignore[reportConstantRedefinition]
+        if not self.email.from_name:
+            self.email.from_name = self.app.project_name
         return self
 
-    @computed_field
     @property
     def emails_enabled(self) -> bool:
         """
-        Checks if email sending is enabled.
+        Whether emails can be sent: both an SMTP host and a sender address are set.
 
-        :return: True if email sending is enabled, False otherwise.
+        :return: True if email sending is enabled.
         """
-        return bool(self.SMTP_HOST and self.EMAILS_FROM_EMAIL)
-
-    # Security checks
-    def _check_default_secret(self, var_name: str, value: SecretStr) -> None:
-        """
-        Checks if the given secret value is set to the default placeholder 'changethis'.
-
-        :param var_name: The name of the variable being checked.
-        :param value: The value of the secret to be checked.
-        :return: None
-        :raises ValueError: If the value is set to the default placeholder and the environment is not 'local'.
-        """
-        if value.get_secret_value() == "changethis":
-            message: str = f"The value of {var_name} is 'changethis', for security, please change it."
-            if self.ENVIRONMENT == "local":
-                warn(message=message, stacklevel=1)
-            else:
-                raise ValueError(message)
-
-    @model_validator(mode="after")
-    def _enforce_non_default_secrets(self) -> Self:
-        """
-        Checks if the default secret values are set to the default placeholders in the local environment.
-
-        :return: The instance of the model.
-        """
-        self._check_default_secret(var_name="SECRET_KEY", value=self.SECRET_KEY)
-        self._check_default_secret(var_name="POSTGRES_PASSWORD", value=self.POSTGRES_PASSWORD)
-        self._check_default_secret(var_name="FIRST_SUPERUSER_PASSWORD", value=self.FIRST_SUPERUSER_PASSWORD)
-        return self
+        return bool(self.smtp.host and self.email.from_email)
 
 
 @lru_cache(maxsize=1)
-def get_settings(env_file: Path = _DEFAULT_ENV_FILE) -> Settings:
+def get_settings() -> Settings:
     """
-    Returns the Settings object. The lru_cache decorator ensures this function is only called once.
+    Returns the settings. The lru_cache decorator ensures they are read only once.
 
-    :param env_file: Path to the .env file. Defaults to the standard .env location.
-    :return: Settings object.
+    :return: The settings.
     """
-    # The required fields come from the environment, and _env_file is a pydantic-settings init option
-    return Settings(_env_file=env_file)  # pyright: ignore[reportCallIssue]
+    return Settings()

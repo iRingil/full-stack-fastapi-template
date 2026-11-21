@@ -12,6 +12,7 @@ from jwt.exceptions import InvalidTokenError
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.core.config import Settings, get_settings
+from app.core.constants import API_V1_STR
 from app.core.db import DatabaseManager, get_db_manager
 from app.core.emails import EmailManager, get_email_manager
 from app.core.security import SecurityManager, get_security_manager
@@ -42,7 +43,7 @@ EmailManagerDep = Annotated[EmailManager, Depends(get_email_manager)]
 
 
 # 2. Authentication schemes
-_token_url: str = f"{get_settings().API_V1_STR}/login/access-token"
+_token_url: str = f"{API_V1_STR}/login/access-token"
 # Strict version for mandatory authentication
 _reusable_oauth2_strict: OAuth2PasswordBearer = OAuth2PasswordBearer(tokenUrl=_token_url)
 # Flexible version for optional authentication (does not crash with an error)
@@ -84,7 +85,7 @@ def _decode_user_id_from_token(*, token: str, settings: Settings, security_manag
     )
     try:
         payload: dict[str, object] = jwt.decode(
-            jwt=token, key=settings.SECRET_KEY.get_secret_value(), algorithms=[security_manager.ALGORITHM]
+            jwt=token, key=settings.security.secret_key.get_secret_value(), algorithms=[security_manager.ALGORITHM]
         )
     except InvalidTokenError as exc:
         raise credentials_error from exc

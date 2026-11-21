@@ -83,10 +83,10 @@ class MiddlewareConfigurator:
             DbSessionMiddleware,
             db_manager=self._db_manager,
         )
-        if self._settings.all_cors_origins:
+        if self._settings.app.all_cors_origins:
             self._app.add_middleware(
                 CORSMiddleware,
-                allow_origins=[str(origin) for origin in self._settings.all_cors_origins],
+                allow_origins=[str(origin) for origin in self._settings.app.all_cors_origins],
                 allow_credentials=True,
                 allow_methods=["*"],
                 allow_headers=["*"],

@@ -2,13 +2,12 @@
 
 from collections.abc import AsyncGenerator
 from functools import lru_cache
-from urllib.parse import quote_plus
 
-from sqlalchemy import text
+from sqlalchemy import URL, text
 from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker, create_async_engine
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from app.core.config import Settings, get_settings
+from app.core.config import PostgresSettings, Settings, get_settings
 
 __all__: tuple[str, ...] = ("DatabaseManager", "get_db_manager")
 
@@ -23,7 +22,7 @@ class DatabaseManager:
         :param settings: The application settings object.
         """
         self._async_engine: AsyncEngine = create_async_engine(
-            url=self._build_database_uri(settings=settings),
+            url=self._build_database_url(settings=settings),
             # Recommendations for GENERAL DB (quota ~45 out of 100)
             pool_size=3,  # Number of 'persistent' connections per worker.
             max_overflow=2,  # Number of 'additional' connections for peaks.
@@ -36,23 +35,30 @@ class DatabaseManager:
         )
 
     @staticmethod
-    def _build_database_uri(settings: Settings) -> str:
+    def _build_database_url(settings: Settings) -> URL:
         """
-        Constructs the SQLAlchemy database URI. A Unix socket is used in production when it is configured.
+        Builds the SQLAlchemy database URL. A Unix socket is used in production when it is configured.
 
         :param settings: The application settings object.
-        :return: String representation of the database URI.
+        :return: The database URL.
         """
-        user_info: str = settings.POSTGRES_USER
-        password: str = settings.POSTGRES_PASSWORD.get_secret_value()
-        if password:
-            user_info += f":{quote_plus(string=password)}"
-        if settings.ENVIRONMENT == "production" and settings.POSTGRES_SOCKET:
-            socket: str = quote_plus(string=settings.POSTGRES_SOCKET)
-            return f"postgresql+asyncpg://{user_info}@/{settings.POSTGRES_DB}?host={socket}"
-        return (
-            f"postgresql+asyncpg://{user_info}@{settings.POSTGRES_SERVER}:{settings.POSTGRES_PORT}/"
-            f"{settings.POSTGRES_DB}"
+        postgres: PostgresSettings = settings.postgres
+        password: str | None = postgres.password.get_secret_value() if postgres.password else None
+        if settings.app.environment == "production" and postgres.socket:
+            return URL.create(
+                drivername="postgresql+asyncpg",
+                username=postgres.user,
+                password=password,
+                database=postgres.db,
+                query={"host": str(postgres.socket)},
+            )
+        return URL.create(
+            drivername="postgresql+asyncpg",
+            username=postgres.user,
+            password=password,
+            host=postgres.server,
+            port=postgres.port,
+            database=postgres.db,
         )
 
     @property
@@ -80,7 +86,7 @@ class DatabaseManager:
         :return: None
         """
         async with self._async_engine.begin() as conn:
-            await conn.run_sync(lambda sync_conn: sync_conn.execute(statement=text("SELECT 1")))
+            await conn.execute(statement=text("SELECT 1"))
 
     async def close_database_connection(self) -> None:
         """

@@ -37,7 +37,9 @@ class SecurityManager:
         """
         expire: datetime = datetime.now(tz=UTC) + expires_delta
         to_encode: dict[str, datetime | str] = {"exp": expire, "sub": subject}
-        return jwt.encode(payload=to_encode, key=self._settings.SECRET_KEY.get_secret_value(), algorithm=self.ALGORITHM)
+        return jwt.encode(
+            payload=to_encode, key=self._settings.security.secret_key.get_secret_value(), algorithm=self.ALGORITHM
+        )
 
     def _encode_password(self, password: str) -> bytes:
         """

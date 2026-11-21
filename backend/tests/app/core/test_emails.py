@@ -15,7 +15,7 @@ import jwt
 from app.core.config import Settings
 from app.core.emails import EmailManager, get_email_manager
 from app.core.security import SecurityManager
-from tests.conftest import html_of
+from tests.conftest import html_of, with_settings
 
 __all__: tuple[str, ...] = ()
 
@@ -62,7 +62,7 @@ class TestTokens:
         """
         no_subject: str = jwt.encode(
             payload={"exp": datetime.now(tz=UTC) + timedelta(minutes=1), "purpose": "password_reset"},
-            key=settings.SECRET_KEY.get_secret_value(),
+            key=settings.security.secret_key.get_secret_value(),
             algorithm=SecurityManager.ALGORITHM,
         )
         assert email_manager.verify_password_reset_token(token="garbage") is None
@@ -153,14 +153,10 @@ class TestDelivery:
         :param log_messages: The messages logged during the test.
         :return: None
         """
-        closed_port: Settings = settings.model_copy(
-            update={
-                "SMTP_HOST": "127.0.0.1",
-                "SMTP_PORT": 1,
-                "SMTP_TLS": False,
-                "SMTP_USER": "user",
-                "EMAILS_FROM_EMAIL": "noreply@example.com",
-            }
+        closed_port: Settings = with_settings(
+            settings=with_settings(settings=settings, group="smtp", host="127.0.0.1", port=1, tls=False, user="user"),
+            group="email",
+            from_email="noreply@example.com",
         )
         email_manager: EmailManager = EmailManager(settings=closed_port, security_manager=security_manager)
         await email_manager.send_test_email(email_to="a@example.com")

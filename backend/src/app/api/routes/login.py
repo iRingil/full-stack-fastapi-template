@@ -70,7 +70,7 @@ class LoginRouter:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Incorrect email or password")
         if not user.is_active:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Inactive user")
-        access_token_expires: timedelta = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+        access_token_expires: timedelta = timedelta(minutes=settings.security.access_token_expire_minutes)
         return Token(
             access_token=security_manager.create_access_token(subject=str(user.id), expires_delta=access_token_expires)
         )

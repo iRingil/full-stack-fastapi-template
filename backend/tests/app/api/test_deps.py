@@ -33,7 +33,9 @@ def _token(settings: Settings, payload: dict[str, object]) -> str:
     :param payload: The payload.
     :return: The token.
     """
-    return jwt.encode(payload=payload, key=settings.SECRET_KEY.get_secret_value(), algorithm=SecurityManager.ALGORITHM)
+    return jwt.encode(
+        payload=payload, key=settings.security.secret_key.get_secret_value(), algorithm=SecurityManager.ALGORITHM
+    )
 
 
 def _request(client: tuple[str, int] | None) -> Request:

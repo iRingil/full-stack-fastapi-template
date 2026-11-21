@@ -44,5 +44,5 @@ class MainRouter:
         self._router.include_router(router=users_router, prefix="/users", tags=["users"])
         self._router.include_router(router=utils_router, prefix="/utils", tags=["utils"])
         self._router.include_router(router=items_router, prefix="/items", tags=["items"])
-        if self._settings.ENVIRONMENT == "local":
+        if self._settings.app.environment == "local":
             self._router.include_router(router=private_router, prefix="/private", tags=["private"])

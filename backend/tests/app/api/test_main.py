@@ -6,6 +6,7 @@ from fastapi import FastAPI
 
 from app.api.main import MainRouter
 from app.core.config import Settings
+from tests.conftest import with_settings
 
 __all__: tuple[str, ...] = ()
 
@@ -43,6 +44,6 @@ class TestMainRouter:
         :param settings: The test settings.
         :return: None
         """
-        paths: set[str] = _paths(settings=settings.model_copy(update={"ENVIRONMENT": "production"}))
+        paths: set[str] = _paths(settings=with_settings(settings=settings, group="app", environment="production"))
         assert "/users/me" in paths
         assert "/private/users/" not in paths

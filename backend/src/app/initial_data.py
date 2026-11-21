@@ -6,6 +6,7 @@ from loguru import logger
 from sqlmodel import SQLModel
 
 from app.core.config import Settings, get_settings
+from app.core.constants import BASE_DIR
 from app.core.db import DatabaseManager, get_db_manager
 from app.core.log_setup import LoggingManager
 from app.core.security import get_security_manager
@@ -48,11 +49,11 @@ class InitialDataGenerator:
         logger.info("Creating first superuser...")
         async for session in self._db_manager.get_session():
             user_crud: UserCRUD = UserCRUD(session=session, security_manager=get_security_manager())
-            user: User | None = await user_crud.get_by_email(email=self._settings.FIRST_SUPERUSER)
+            user: User | None = await user_crud.get_by_email(email=self._settings.superuser.email)
             if not user:
                 user_in: UserCreate = UserCreate(
-                    email=self._settings.FIRST_SUPERUSER,
-                    password=self._settings.FIRST_SUPERUSER_PASSWORD.get_secret_value(),
+                    email=self._settings.superuser.email,
+                    password=self._settings.superuser.password.get_secret_value(),
                     is_superuser=True,
                     is_email_verified=True,
                 )
@@ -79,7 +80,7 @@ async def main() -> None:
     """
     settings: Settings = get_settings()
     LoggingManager(
-        debug=settings.ENVIRONMENT == "local", log_dir=settings.BASE_DIR / "logs", project_name=settings.PROJECT_NAME
+        debug=settings.app.environment == "local", log_dir=BASE_DIR / "logs", project_name=settings.app.project_name
     )
     generator: InitialDataGenerator = InitialDataGenerator(db_manager=get_db_manager(), settings=settings)
     await generator.run()

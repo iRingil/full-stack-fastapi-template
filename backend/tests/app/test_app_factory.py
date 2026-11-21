@@ -2,15 +2,15 @@
 
 # ruff: noqa: S101
 
-from pathlib import Path
-
 import pytest
 from sqlalchemy.pool import AsyncAdaptedQueuePool, Pool
 
 import app.app_factory as app_factory  # noqa: PLR0402 - for basedpyright 'from app import' means the tests' own app package
 from app.app_factory import AppFactory
 from app.core.config import Settings
+from app.core.constants import BASE_DIR
 from app.core.db import DatabaseManager
+from tests.conftest import with_settings
 
 __all__: tuple[str, ...] = ()
 
@@ -59,9 +59,7 @@ class TestAppFactory:
         assert application.debug is True
         assert application.openapi_url == "/api/v1/openapi.json"
         assert application.docs_url == "/docs"
-        assert logging_calls == [
-            {"debug": True, "log_dir": Path(settings.BASE_DIR, "logs"), "project_name": "Test Project"}
-        ]
+        assert logging_calls == [{"debug": True, "log_dir": BASE_DIR / "logs", "project_name": "Test Project"}]
 
     @pytest.mark.usefixtures("logging_calls")
     def test_production_application(self, settings: Settings, db_manager: DatabaseManager) -> None:
@@ -72,7 +70,7 @@ class TestAppFactory:
         :param db_manager: The test database manager.
         :return: None
         """
-        production: Settings = settings.model_copy(update={"ENVIRONMENT": "production"})
+        production: Settings = with_settings(settings=settings, group="app", environment="production")
         application = AppFactory(settings=production, db_manager=db_manager).app
         assert application.debug is False
         assert (application.openapi_url, application.docs_url, application.redoc_url) == (None, None, None)

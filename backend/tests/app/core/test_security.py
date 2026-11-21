@@ -69,7 +69,7 @@ def test_access_token(settings: Settings, security_manager: SecurityManager) -> 
     """
     token: str = security_manager.create_access_token(subject="user-id", expires_delta=timedelta(minutes=5))
     payload: dict[str, object] = jwt.decode(
-        jwt=token, key=settings.SECRET_KEY.get_secret_value(), algorithms=[SecurityManager.ALGORITHM]
+        jwt=token, key=settings.security.secret_key.get_secret_value(), algorithms=[SecurityManager.ALGORITHM]
     )
     assert payload["sub"] == "user-id"
     assert "exp" in payload

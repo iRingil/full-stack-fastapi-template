@@ -9,6 +9,7 @@ from loguru import logger
 
 from app.api.main import MainRouter
 from app.core.config import Settings, get_settings
+from app.core.constants import API_V1_STR, BASE_DIR
 from app.core.db import DatabaseManager, get_db_manager
 from app.core.log_setup import LoggingManager
 from app.core.middleware import MiddlewareConfigurator
@@ -29,18 +30,18 @@ class AppFactory:
         self._settings: Settings = settings or get_settings()
         self._db_manager: DatabaseManager = db_manager or get_db_manager()
         LoggingManager(
-            debug=self._settings.ENVIRONMENT == "local",
-            log_dir=self._settings.BASE_DIR / "logs",
-            project_name=self._settings.PROJECT_NAME,
+            debug=self._settings.app.environment == "local",
+            log_dir=BASE_DIR / "logs",
+            project_name=self._settings.app.project_name,
         )
         # Documentation and debug mode exist only in the local environment
-        is_local: bool = self._settings.ENVIRONMENT == "local"
+        is_local: bool = self._settings.app.environment == "local"
         self.app: FastAPI = FastAPI(
-            title=self._settings.PROJECT_NAME,
+            title=self._settings.app.project_name,
             generate_unique_id_function=self._custom_generate_unique_id,
             lifespan=self._lifespan,
             debug=is_local,
-            openapi_url=f"{self._settings.API_V1_STR}/openapi.json" if is_local else None,
+            openapi_url=f"{API_V1_STR}/openapi.json" if is_local else None,
             docs_url="/docs" if is_local else None,
             redoc_url="/redoc" if is_local else None,
             swagger_ui_oauth2_redirect_url="/docs/oauth2-redirect" if is_local else None,
@@ -80,4 +81,4 @@ class AppFactory:
         :return: None
         """
         main_router: MainRouter = MainRouter(settings=self._settings)
-        self.app.include_router(router=main_router.router, prefix=self._settings.API_V1_STR)
+        self.app.include_router(router=main_router.router, prefix=API_V1_STR)

@@ -11,7 +11,7 @@ from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient, Response
 from starlette.types import Message, Scope
 
-from app.core.config import Settings
+from app.core.config import AppSettings, Settings
 from app.core.db import DatabaseManager
 from app.core.middleware import DbSessionMiddleware, MiddlewareConfigurator
 
@@ -138,7 +138,7 @@ class TestCors:
         :param db_manager: The test database manager.
         :return: None
         """
-        monkeypatch.setattr(target=Settings, name="all_cors_origins", value=property(lambda _: []))
+        monkeypatch.setattr(target=AppSettings, name="all_cors_origins", value=property(lambda _: []))
         application: FastAPI = FastAPI()
         MiddlewareConfigurator(app=application, settings=settings, db_manager=db_manager).add_all_middleware()
         assert [entry.cls for entry in application.user_middleware] == [DbSessionMiddleware]

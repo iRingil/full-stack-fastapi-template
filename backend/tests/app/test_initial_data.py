@@ -53,7 +53,7 @@ class TestInitialDataGenerator:
         await generator.run()
         assert (await session.exec(statement=select(func.count()).select_from(User))).one() == 1
         superuser: User | None = await user_crud.authenticate(
-            email=settings.FIRST_SUPERUSER, password=settings.FIRST_SUPERUSER_PASSWORD.get_secret_value()
+            email=settings.superuser.email, password=settings.superuser.password.get_secret_value()
         )
         assert superuser is not None
         assert superuser.is_superuser

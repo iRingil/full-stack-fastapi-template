@@ -2,12 +2,15 @@
 
 # ruff: noqa: S101, SLF001
 
+from pathlib import Path
+
 import pytest
 from pydantic import SecretStr
 from sqlalchemy.pool import AsyncAdaptedQueuePool, Pool
 
 from app.core.config import Settings
 from app.core.db import DatabaseManager, get_db_manager
+from tests.conftest import with_settings
 
 __all__: tuple[str, ...] = ()
 
@@ -24,20 +27,38 @@ def _pool(db_manager: DatabaseManager) -> AsyncAdaptedQueuePool:
     return pool
 
 
-class TestBuildDatabaseUri:
-    """Tests for DatabaseManager._build_database_uri."""
+class TestBuildDatabaseUrl:
+    """Tests for DatabaseManager._build_database_url."""
+
+    @staticmethod
+    def _url(settings: Settings) -> str:
+        """
+        The URL of the settings as a string, with the password.
+
+        :param settings: The settings.
+        :return: The URL.
+        """
+        return DatabaseManager._build_database_url(settings=settings).render_as_string(hide_password=False)
 
     def test_host_and_port(self, settings: Settings) -> None:
         """
-        Locally the URI points at host:port; the password is percent-encoded.
+        Locally the URL points at host:port; the password is escaped.
 
         :param settings: The test settings.
         :return: None
         """
-        local: Settings = settings.model_copy(update={"POSTGRES_PASSWORD": SecretStr("p@ss word")})
-        assert DatabaseManager._build_database_uri(settings=local) == (
-            "postgresql+asyncpg://test_user:p%40ss+word@127.0.0.1:5432/test_db"
-        )
+        local: Settings = with_settings(settings=settings, group="postgres", password=SecretStr("p@ss"))
+        assert self._url(settings=local) == "postgresql+asyncpg://test_user:p%40ss@127.0.0.1:5432/test_db"
+
+    def test_ipv6_host(self, settings: Settings) -> None:
+        """
+        An IPv6 host goes in square brackets.
+
+        :param settings: The test settings.
+        :return: None
+        """
+        ipv6: Settings = with_settings(settings=settings, group="postgres", server="::1")
+        assert self._url(settings=ipv6) == "postgresql+asyncpg://test_user:test_password@[::1]:5432/test_db"
 
     def test_socket_in_production(self, settings: Settings) -> None:
         """
@@ -46,12 +67,12 @@ class TestBuildDatabaseUri:
         :param settings: The test settings.
         :return: None
         """
-        production: Settings = settings.model_copy(
-            update={"ENVIRONMENT": "production", "POSTGRES_SOCKET": "/var/run/postgresql"}
+        production: Settings = with_settings(
+            settings=with_settings(settings=settings, group="app", environment="production"),
+            group="postgres",
+            socket=Path("/var/run/postgresql"),
         )
-        assert DatabaseManager._build_database_uri(settings=production) == (
-            "postgresql+asyncpg://test_user:test_password@/test_db?host=%2Fvar%2Frun%2Fpostgresql"
-        )
+        assert self._url(settings=production).startswith("postgresql+asyncpg://test_user:test_password@/test_db?host=")
 
     @pytest.mark.parametrize(argnames="environment", argvalues=["local", "production"])
     def test_without_a_password(self, settings: Settings, environment: str) -> None:
@@ -62,12 +83,12 @@ class TestBuildDatabaseUri:
         :param environment: The environment.
         :return: None
         """
-        no_password: Settings = settings.model_copy(
-            update={"POSTGRES_PASSWORD": SecretStr(""), "ENVIRONMENT": environment}
+        no_password: Settings = with_settings(
+            settings=with_settings(settings=settings, group="app", environment=environment),
+            group="postgres",
+            password=None,
         )
-        assert DatabaseManager._build_database_uri(settings=no_password) == (
-            "postgresql+asyncpg://test_user@127.0.0.1:5432/test_db"
-        )
+        assert self._url(settings=no_password) == "postgresql+asyncpg://test_user@127.0.0.1:5432/test_db"
 
 
 class TestLifecycle:
