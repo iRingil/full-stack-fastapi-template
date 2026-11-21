@@ -1,20 +1,13 @@
 """Module for private endpoints."""
 
-from typing import Annotated
-
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, HTTPException, status
 from fastapi_utils.cbv import cbv
 
-from app.api.deps import UserCrudDep
-from app.core.config import get_settings, Settings
-from app.core.emails import EmailManager, get_email_manager
-from app.models import UserCreate, UserPublic, User
+from app.api.deps import EmailManagerDep, UserCrudDep
+from app.models import User, UserCreate, UserPublic
 
-__all__: tuple[str] = ("private_router",)
+__all__: tuple[str, ...] = ("private_router",)
 
-
-EmailManagerDep = Annotated[EmailManager, Depends(get_email_manager)]
-SettingsDep = Annotated[Settings, Depends(get_settings)]
 
 private_router: APIRouter = APIRouter()
 
@@ -23,28 +16,26 @@ private_router: APIRouter = APIRouter()
 class PrivateRouter:
     """Class-based view for private endpoints."""
 
-    def __init__(self, user_crud: UserCrudDep, email_manager: EmailManagerDep, settings: SettingsDep) -> None:
+    def __init__(self, user_crud: UserCrudDep, email_manager: EmailManagerDep) -> None:
         """
         Initializes the PrivateRouter class with the necessary dependencies.
 
         :param user_crud: Dependency for user CRUD operations.
         :param email_manager: Dependency for email management operations.
-        :param settings: Dependency for application settings.
         """
         self._user_crud: UserCrudDep = user_crud
         self._email_manager: EmailManagerDep = email_manager
-        self._settings: SettingsDep = settings
 
     @private_router.post(
         path="/users/",
         response_model=UserPublic,
         summary="Create User",
         status_code=status.HTTP_201_CREATED,
-        description="Create new user and send new account email.",
+        description="Create new user and send a welcome email.",
     )
     async def create_user(self, user_in: UserCreate, background_tasks: BackgroundTasks) -> User:
         """
-        Create new user and send new account email.
+        Create new user and send a welcome email.
 
         :param user_in: The data for the user to be created.
         :param background_tasks: The background tasks service.
@@ -56,12 +47,9 @@ class PrivateRouter:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST, detail="The user with this email already exists in the system."
             )
-        user: User = await self._user_crud.create(user_create=user_in)
-        if self._settings.emails_enabled:
+        user: User = await self._user_crud.create(obj_in=user_in)
+        if not user.is_email_verified:
             background_tasks.add_task(
-                func=self._email_manager.send_new_account_email,
-                email_to=user_in.email,  # type: ignore
-                username=user_in.email,  # type: ignore
-                password=user_in.password,
+                self._email_manager.send_welcome_email, email_to=user.email, username=user.full_name or user.email
             )
         return user

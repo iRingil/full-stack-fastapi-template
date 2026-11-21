@@ -1,26 +1,36 @@
 """Module for login and authentication endpoints."""
 
-from asyncio import create_task
 from datetime import timedelta
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from fastapi.responses import HTMLResponse
 from fastapi.security import OAuth2PasswordRequestForm
 from fastapi_utils.cbv import cbv
 
-from app.api.deps import CurrentUser, CurrentSuperuser, UserCrudDep
-from app.core.config import get_settings, Settings
-from app.core.emails import EmailManager, get_email_manager
-from app.core.security import get_security_manager, SecurityManager
-from app.models import Message, NewPassword, Token, UserPublic, UserUpdate, User
+from app.api.deps import (
+    CurrentSuperuser,
+    CurrentUser,
+    EmailManagerDep,
+    ResendVerificationRateLimiter,
+    SecurityManagerDep,
+    SettingsDep,
+    UserCrudDep,
+)
+from app.models import (
+    Message,
+    NewPassword,
+    ResendVerificationRequest,
+    Token,
+    User,
+    UserPublic,
+    UserUpdate,
+    VerifyEmailRequest,
+)
 
-__all__: tuple[str] = ("login_router",)
+__all__: tuple[str, ...] = ("login_router",)
 
 
-SettingsDep = Annotated[Settings, Depends(get_settings)]
-EmailManagerDep = Annotated[EmailManager, Depends(get_email_manager)]
-SecurityManagerDep = Annotated[SecurityManager, Depends(get_security_manager)]
 OAuthFormDep = Annotated[OAuth2PasswordRequestForm, Depends()]
 
 login_router: APIRouter = APIRouter()
@@ -30,6 +40,14 @@ login_router: APIRouter = APIRouter()
 class LoginRouter:
     """Class-based view for login and authentication endpoints."""
 
+    def __init__(self, user_crud: UserCrudDep) -> None:
+        """
+        Initializes the LoginRouter class with the necessary dependencies.
+
+        :param user_crud: Dependency for user CRUD operations.
+        """
+        self._user_crud: UserCrudDep = user_crud
+
     @login_router.post(
         path="/login/access-token",
         response_model=Token,
@@ -37,27 +55,22 @@ class LoginRouter:
         description="OAuth2 compatible token login, get an access token for future requests.",
     )
     async def login_access_token(
-        self,
-        form_data: OAuthFormDep,
-        user_crud: UserCrudDep,
-        security_manager: SecurityManagerDep,
-        settings: SettingsDep,
+        self, form_data: OAuthFormDep, security_manager: SecurityManagerDep, settings: SettingsDep
     ) -> Token:
         """
         Endpoint for user login to obtain an access token.
 
         :param form_data: The OAuth2 password request form data (username and password).
-        :param user_crud: Dependency for user CRUD operations.
         :param security_manager: Dependency for security-related operations.
         :param settings: The application settings dependency.
         :return: An access token.
         :raises HTTPException: If login details are incorrect or the user is inactive.
         """
-        user: User | None = await user_crud.authenticate(email=form_data.username, password=form_data.password)
+        user: User | None = await self._user_crud.authenticate(email=form_data.username, password=form_data.password)
         if not user:
-            raise HTTPException(status_code=400, detail="Incorrect email or password")
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Incorrect email or password")
         if not user.is_active:
-            raise HTTPException(status_code=400, detail="Inactive user")
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Inactive user")
         access_token_expires: timedelta = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
         return Token(
             access_token=security_manager.create_access_token(subject=str(user.id), expires_delta=access_token_expires)
@@ -85,33 +98,22 @@ class LoginRouter:
         description="Send a password recovery email.",
     )
     async def recover_password(
-        self,
-        email: str,
-        user_crud: UserCrudDep,
-        email_manager: EmailManagerDep,
-        settings: SettingsDep,
+        self, email: str, background_tasks: BackgroundTasks, email_manager: EmailManagerDep
     ) -> Message:
         """
         Endpoint to initiate password recovery for a user.
 
+        The answer is the same whether the user exists or not, so that it does not reveal registered emails.
+
         :param email: The email address of the user.
-        :param user_crud: Dependency for user CRUD operations.
+        :param background_tasks: The background tasks service.
         :param email_manager: The email manager dependency.
-        :param settings: The application settings dependency.
         :return: A confirmation message.
-        :raises HTTPException: If the user with the provided email is not found (local env only).
         """
-        user: User | None = await user_crud.get_by_email(email=email)
-        if settings.ENVIRONMENT != "local":
-            if user:
-                create_task(coro=email_manager.send_reset_password_email(email_to=email))
-            return Message(message="If an account with that email exists, a recovery email has been sent.")
-        if not user:
-            raise HTTPException(
-                status_code=404, detail="The user with this email does not exist in the system. (Local env only)"
-            )
-        create_task(coro=email_manager.send_reset_password_email(email_to=email))
-        return Message(message="Password recovery email sent")
+        user: User | None = await self._user_crud.get_by_email(email=email)
+        if user:
+            background_tasks.add_task(email_manager.send_reset_password_email, email_to=user.email)
+        return Message(message="If an account with that email exists, a recovery email has been sent.")
 
     @login_router.post(
         path="/reset-password/",
@@ -119,32 +121,87 @@ class LoginRouter:
         summary="Reset Password",
         description="Reset user password using a recovery token.",
     )
-    async def reset_password(
-        self, body: NewPassword, user_crud: UserCrudDep, email_manager: EmailManagerDep
-    ) -> Message:
+    async def reset_password(self, body: NewPassword, email_manager: EmailManagerDep) -> Message:
         """
         Endpoint to reset a user's password using a valid token.
 
         :param body: The request body containing the token and new password.
-        :param user_crud: Dependency for user CRUD operations.
         :param email_manager: The email manager dependency.
         :return: A confirmation message.
-        :raises HTTPException: If the token is invalid or the user with the provided email is not found.
+        :raises HTTPException: If the token is invalid, the user is not found or inactive.
         """
         email: str | None = email_manager.verify_password_reset_token(token=body.token)
         if not email:
-            raise HTTPException(status_code=400, detail="Invalid token")
-        user: User | None = await user_crud.get_by_email(email=email)
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid token")
+        user: User | None = await self._user_crud.get_by_email(email=email)
         if not user:
-            raise HTTPException(status_code=404, detail="The user with this email does not exist in the system.")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="The user with this email does not exist in the system."
+            )
         if not user.is_active:
-            raise HTTPException(status_code=400, detail="Inactive user")
-        user_update_data: UserUpdate = UserUpdate(password=body.new_password)
-        await user_crud.update(db_user=user, user_in=user_update_data)
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Inactive user")
+        # The link from the email proves that the user owns the address
+        await self._user_crud.update(
+            db_obj=user, obj_in=UserUpdate(password=body.new_password), update={"is_email_verified": True}
+        )
         return Message(message="Password updated successfully")
 
-    # noinspection PyProtectedMember
-    # pylint: disable=protected-access
+    @login_router.post(
+        path="/verify-email/",
+        response_model=Message,
+        summary="Verify Email",
+        description="Confirm the user's email address using the token from the verification email.",
+    )
+    async def verify_email(self, body: VerifyEmailRequest, email_manager: EmailManagerDep) -> Message:
+        """
+        Endpoint to confirm a user's email address.
+
+        :param body: The request body containing the verification token.
+        :param email_manager: The email manager dependency.
+        :return: A confirmation message.
+        :raises HTTPException: If the token is invalid or the user is not found.
+        """
+        email: str | None = email_manager.verify_email_verify_token(token=body.token)
+        if not email:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or expired verification token")
+        user: User | None = await self._user_crud.get_by_email(email=email)
+        if not user:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+        if user.is_email_verified:
+            return Message(message="This email has already been verified")
+        await self._user_crud.update(db_obj=user, obj_in=UserUpdate(), update={"is_email_verified": True})
+        return Message(message="Email verified successfully")
+
+    @login_router.post(
+        path="/resend-verification/",
+        response_model=Message,
+        summary="Resend Verification Email",
+        description="Send a new verification email to a user whose email is not verified yet. "
+        "Limited to one request per minute per IP address.",
+        dependencies=[ResendVerificationRateLimiter],
+    )
+    async def resend_verification_email(
+        self, body: ResendVerificationRequest, background_tasks: BackgroundTasks, email_manager: EmailManagerDep
+    ) -> Message:
+        """
+        Endpoint to resend a verification email.
+
+        The answer is the same whether the user exists or not, so that it does not reveal registered emails.
+
+        :param body: The request body containing the email address of the user.
+        :param background_tasks: The background tasks service.
+        :param email_manager: The email manager dependency.
+        :return: A confirmation message.
+        """
+        user: User | None = await self._user_crud.get_by_email(email=body.email)
+        if user and user.is_active and not user.is_email_verified:
+            background_tasks.add_task(
+                email_manager.send_verification_email, email_to=user.email, username=user.full_name or user.email
+            )
+        return Message(
+            message="If an account with that email exists and is not yet verified, a new verification email has been sent."
+        )
+
     @login_router.post(
         path="/password-recovery-html-content/{email}",
         response_class=HTMLResponse,
@@ -162,18 +219,5 @@ class LoginRouter:
         :param email_manager: The email manager dependency.
         :return: An HTML response with the email content.
         """
-        token: str = email_manager.generate_password_reset_token(email=email)
-        email_data: str = await email_manager._render_template(
-            template_name="reset_password.html",
-            context={
-                "project_name": email_manager._settings.PROJECT_NAME,
-                "username": email,
-                "email": email,
-                "valid_hours": email_manager._settings.EMAIL_RESET_TOKEN_EXPIRE_HOURS,
-                "link": f"{email_manager._settings.FRONTEND_HOST}/reset-password?token={token}",
-            },
-        )
-        return HTMLResponse(
-            content=email_data,
-            headers={"subject": f"{email_manager._settings.PROJECT_NAME} - Password recovery for user {email}"},
-        )
+        subject, html_content = await email_manager.render_reset_password_email(email_to=email)
+        return HTMLResponse(content=html_content, headers={"subject": subject})

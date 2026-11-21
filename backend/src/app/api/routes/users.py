@@ -3,13 +3,10 @@
 from typing import Annotated, Any
 from uuid import UUID
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Path, status
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Path, status
 from fastapi_utils.cbv import cbv
 
-from app.api.deps import CurrentUser, CurrentSuperuser, ItemCrudDep, UserCrudDep
-from app.core.config import get_settings, Settings
-from app.core.emails import EmailManager, get_email_manager
-from app.core.security import get_security_manager, SecurityManager
+from app.api.deps import CurrentSuperuser, CurrentUser, EmailManagerDep, SecurityManagerDep, UserCrudDep
 from app.models import (
     Message,
     UpdatePassword,
@@ -22,11 +19,8 @@ from app.models import (
     UsersPublic,
 )
 
-__all__: tuple[str] = ("users_router",)
+__all__: tuple[str, ...] = ("users_router",)
 
-EmailManagerDep = Annotated[EmailManager, Depends(get_email_manager)]
-SettingsDep = Annotated[Settings, Depends(get_settings)]
-SecurityManagerDep = Annotated[SecurityManager, Depends(get_security_manager)]
 UserIdDep = Annotated[UUID, Path(alias="id", description="User ID")]
 
 users_router: APIRouter = APIRouter()
@@ -73,16 +67,16 @@ class UsersRouter:
         user_in: UserCreate,
         email_manager: EmailManagerDep,
         background_tasks: BackgroundTasks,
-        settings: SettingsDep,
         _: CurrentSuperuser,
     ) -> User:
         """
-        Endpoint to create a new user. Requires superuser privileges.
+        Endpoint to create a new user and send a welcome email. Requires superuser privileges.
+
+        The password is not sent by email: the superuser passes it to the user personally.
 
         :param user_in: The data for the user to be created.
         :param email_manager: The email manager dependency.
         :param background_tasks: The background tasks service.
-        :param settings: The application settings dependency.
         :param _: The current superuser dependency to enforce permissions.
         :return: The newly created user.
         :raises HTTPException: If the user with the given email address already exists in the system.
@@ -92,13 +86,10 @@ class UsersRouter:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST, detail="The user with this email already exists in the system."
             )
-        new_user: User = await self._user_crud.create(user_create=user_in)
-        if settings.emails_enabled:
+        new_user: User = await self._user_crud.create(obj_in=user_in)
+        if not new_user.is_email_verified:
             background_tasks.add_task(
-                email_manager.send_new_account_email,
-                email_to=user_in.email,  # type: ignore
-                username=user_in.email,  # type: ignore
-                password=user_in.password,
+                email_manager.send_welcome_email, email_to=new_user.email, username=new_user.full_name or new_user.email
             )
         return new_user
 
@@ -120,20 +111,40 @@ class UsersRouter:
         summary="Update Current User",
         description="Updating the current user's data.",
     )
-    async def update_user_me(self, user_in: UserUpdateMe, current_user: CurrentUser) -> User:
+    async def update_user_me(
+        self,
+        user_in: UserUpdateMe,
+        current_user: CurrentUser,
+        background_tasks: BackgroundTasks,
+        email_manager: EmailManagerDep,
+    ) -> User:
         """
         Endpoint for the current user to update their own data.
 
+        A changed email address becomes unverified, and a verification email is sent to it.
+
         :param user_in: The new data for the user.
         :param current_user: The currently authenticated user.
+        :param background_tasks: The background tasks service.
+        :param email_manager: The email manager dependency.
         :return: The updated user data.
         :raises HTTPException: If the user with the given email address already exists in the system.
         """
-        if user_in.email:
-            existing_user: User | None = await self._user_crud.get_by_email(email=user_in.email)
+        email_changed: bool = bool(user_in.email) and user_in.email != current_user.email
+        if email_changed:
+            existing_user: User | None = await self._user_crud.get_by_email(email=str(user_in.email))
             if existing_user and existing_user.id != current_user.id:
                 raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="User with this email already exists")
-        return await self._user_crud.update(db_user=current_user, user_in=user_in)  # type: ignore
+        user: User = await self._user_crud.update(
+            db_obj=current_user,
+            obj_in=UserUpdate.model_validate(obj=user_in.model_dump(exclude_unset=True)),
+            update={"is_email_verified": False} if email_changed else None,
+        )
+        if email_changed:
+            background_tasks.add_task(
+                email_manager.send_verification_email, email_to=user.email, username=user.full_name or user.email
+            )
+        return user
 
     @users_router.patch(
         path="/me/password",
@@ -161,8 +172,7 @@ class UsersRouter:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST, detail="New password cannot be the same as the current one"
             )
-        user_update: UserUpdate = UserUpdate(password=body.new_password)
-        await self._user_crud.update(db_user=current_user, user_in=user_update)
+        await self._user_crud.update(db_obj=current_user, obj_in=UserUpdate(password=body.new_password))
         return Message(message="Password updated successfully")
 
     @users_router.delete(
@@ -170,7 +180,7 @@ class UsersRouter:
     )
     async def delete_user_me(self, current_user: CurrentUser) -> Message:
         """
-        Endpoint for the current user to delete their own account.
+        Endpoint for the current user to delete their own account together with their items.
 
         :param current_user: The currently authenticated user.
         :return: A confirmation message.
@@ -180,7 +190,7 @@ class UsersRouter:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN, detail="Super users are not allowed to delete themselves"
             )
-        await self._user_crud.remove(user_id=current_user.id)
+        await self._user_crud.delete_multi(objs_in=[current_user])
         return Message(message="User deleted successfully")
 
     @users_router.post(
@@ -190,11 +200,15 @@ class UsersRouter:
         summary="Register New User",
         description="New user registration.",
     )
-    async def register_user(self, user_in: UserRegister) -> User:
+    async def register_user(
+        self, user_in: UserRegister, background_tasks: BackgroundTasks, email_manager: EmailManagerDep
+    ) -> User:
         """
-        Endpoint for new user registration.
+        Endpoint for new user registration. Sends a welcome email with an email verification link.
 
         :param user_in: The registration data.
+        :param background_tasks: The background tasks service.
+        :param email_manager: The email manager dependency.
         :return: The newly created user.
         :raises HTTPException: If the user with the given email address already exists in the system.
         """
@@ -203,8 +217,11 @@ class UsersRouter:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST, detail="The user with this email already exists in the system"
             )
-        user_create: UserCreate = UserCreate.model_validate(obj=user_in)
-        return await self._user_crud.create(user_create=user_create)
+        new_user: User = await self._user_crud.create(obj_in=UserCreate.model_validate(obj=user_in))
+        background_tasks.add_task(
+            email_manager.send_welcome_email, email_to=new_user.email, username=new_user.full_name or new_user.email
+        )
+        return new_user
 
     @users_router.get(
         path="/{id}", response_model=UserPublic, summary="Read User by ID", description="Retrieving user data by ID."
@@ -218,7 +235,7 @@ class UsersRouter:
         :return: The requested user's data.
         :raises HTTPException: If the user with the given ID is not found.
         """
-        user: User | None = await self._user_crud.get_by_id(user_id=user_id)
+        user: User | None = await self._user_crud.get_by_id(obj_id=user_id)
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
         if user.id == current_user.id:
@@ -244,16 +261,16 @@ class UsersRouter:
         :raises HTTPException: If the user with the given ID is not found
                                or if a user with the same email already exists.
         """
-        db_user: User | None = await self._user_crud.get_by_id(user_id=user_id)
+        db_user: User | None = await self._user_crud.get_by_id(obj_id=user_id)
         if not db_user:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND, detail="The user with this id does not exist in the system"
             )
         if user_in.email:
-            existing_user: User | None = await self._user_crud.get_by_email(email=user_in.email)
+            existing_user = await self._user_crud.get_by_email(email=user_in.email)
             if existing_user and existing_user.id != user_id:
                 raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="User with this email already exists")
-        return await self._user_crud.update(db_user=db_user, user_in=user_in)
+        return await self._user_crud.update(db_obj=db_user, obj_in=user_in)
 
     @users_router.delete(
         path="/{id}",
@@ -261,25 +278,22 @@ class UsersRouter:
         summary="Delete User by ID",
         description="Delete a user by their ID (superusers only).",
     )
-    async def delete_user(
-        self, user_id: UserIdDep, item_crud: ItemCrudDep, current_superuser: CurrentSuperuser
-    ) -> Message:
+    async def delete_user(self, user_id: UserIdDep, current_superuser: CurrentSuperuser) -> Message:
         """
         Endpoint to delete a user by their ID. Requires superuser privileges.
 
         :param user_id: The ID of the user to delete.
-        :param item_crud: Dependency for item CRUD operations for cascade delete.
         :param current_superuser: The currently authenticated superuser, used for permission checks.
         :return: A confirmation message.
         :raises HTTPException: If the user is not found or tries to delete themselves.
         """
-        user_to_delete: User | None = await self._user_crud.get_by_id(user_id=user_id)
+        user_to_delete: User | None = await self._user_crud.get_by_id(obj_id=user_id)
         if not user_to_delete:
             raise HTTPException(status_code=404, detail="User not found")
         if user_to_delete.id == current_superuser.id:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN, detail="Super users are not allowed to delete themselves"
             )
-        await item_crud.remove_by_owner(owner_id=user_id)
-        await self._user_crud.remove(user_id=user_id)
+        # The ORM cascade deletes the user's items in the same transaction
+        await self._user_crud.delete_multi(objs_in=[user_to_delete])
         return Message(message="User deleted successfully")

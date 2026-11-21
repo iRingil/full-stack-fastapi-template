@@ -1,19 +1,14 @@
 """Module for utility endpoints."""
 
-from typing import Annotated
-
-from fastapi import APIRouter, BackgroundTasks, Depends
+from fastapi import APIRouter, BackgroundTasks
 from fastapi_utils.cbv import cbv
 from pydantic.networks import EmailStr
 
-from app.api.deps import CurrentSuperuser
-from app.core.emails import EmailManager, get_email_manager
+from app.api.deps import CurrentSuperuser, EmailManagerDep
 from app.models import Message
 
-__all__: tuple[str] = ("utils_router",)
+__all__: tuple[str, ...] = ("utils_router",)
 
-
-EmailManagerDep = Annotated[EmailManager, Depends(get_email_manager)]
 
 utils_router: APIRouter = APIRouter()
 
@@ -42,7 +37,7 @@ class UtilsRouter:
 
         :return: A message indicating that the email has been sent.
         """
-        background_tasks.add_task(func=email_manager.send_test_email, email_to=email_to)  # type: ignore
+        background_tasks.add_task(email_manager.send_test_email, email_to=email_to)
         return Message(message="Test email sent")
 
     @utils_router.get(

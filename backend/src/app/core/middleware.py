@@ -1,11 +1,11 @@
 """Module for configuring application middleware."""
 
 from collections.abc import AsyncGenerator, Awaitable, Callable
+from pathlib import Path
+from traceback import FrameSummary, extract_tb
 
 from fastapi import FastAPI
-
-# noinspection PyProtectedMember
-from loguru._logger import Logger
+from loguru import logger
 from sqlmodel.ext.asyncio.session import AsyncSession
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.cors import CORSMiddleware
@@ -14,11 +14,34 @@ from starlette.responses import Response
 
 from app.core.config import Settings
 from app.core.db import DatabaseManager
-from app.core.log_setup import get_logger
 
 __all__: tuple[str, ...] = ("MiddlewareConfigurator",)
 
-logger: Logger = get_logger()
+_APP_DIR: Path = Path(__file__).resolve().parents[1]
+
+
+def _describe_exception(exc: BaseException) -> str:
+    """
+    Describes an exception in one line: its type, the first line of its message and where in the project it occurred.
+
+    :param exc: The exception to describe.
+    :return: A line like 'IntegrityError: ... (app/crud/base.py:120 in create)'.
+    """
+    frames: list[FrameSummary] = extract_tb(tb=exc.__traceback__)
+    # The deepest frame of the project's own code; library frames say little about what went wrong
+    own_frames: list[FrameSummary] = [
+        frame for frame in frames if Path(frame.filename).resolve().is_relative_to(_APP_DIR)
+    ]
+    location: str = ""
+    if origin := (own_frames or frames)[-1:]:
+        frame: FrameSummary = origin[0]
+        try:
+            file_name: str = Path(frame.filename).resolve().relative_to(_APP_DIR.parent).as_posix()
+        except ValueError:
+            file_name = frame.filename
+        location = f" ({file_name}:{frame.lineno} in {frame.name})"
+    message: str = str(exc).strip().splitlines()[0] if str(exc).strip() else ""
+    return f"{type(exc).__name__}: {message}{location}"
 
 
 class DbSessionMiddleware(BaseHTTPMiddleware):
@@ -42,14 +65,15 @@ class DbSessionMiddleware(BaseHTTPMiddleware):
         :param call_next: The function to call to process the request.
         :return: The HTTP response.
         """
-        session_generator: AsyncGenerator[AsyncSession, None] = self.db_manager.get_session()
+        session_generator: AsyncGenerator[AsyncSession] = self.db_manager.get_session()
         session: AsyncSession = await anext(session_generator)
         try:
             response: Response = await call_next(request)
-        except Exception as exc:
-            logger.error(f"An unhandled exception occurred during request processing: {repr(exc)}", )
+        except Exception as exc:  # noqa: BLE001 - the last line of defence: log any error and answer 500
+            logger.error(f"{request.method} {request.url.path} failed: {_describe_exception(exc=exc)}")
             if request.scope.get("client"):
                 return Response(content="Internal Server Error", status_code=500)
+            # For requests without a client (like webhooks), avoid sending a body.
             return Response(status_code=204)
         finally:
             await session.close()
@@ -78,11 +102,12 @@ class MiddlewareConfigurator:
         :return: None
         """
         self._app.add_middleware(
-            middleware_class=DbSessionMiddleware, db_manager=self._db_manager  # type: ignore[arg-type]
+            middleware_class=DbSessionMiddleware,  # type: ignore[arg-type]
+            db_manager=self._db_manager,
         )
         if self._settings.all_cors_origins:
             self._app.add_middleware(
-                middleware_class=CORSMiddleware,
+                middleware_class=CORSMiddleware,  # type: ignore[arg-type]
                 allow_origins=[str(origin) for origin in self._settings.all_cors_origins],
                 allow_credentials=True,
                 allow_methods=["*"],

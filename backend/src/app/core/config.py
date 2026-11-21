@@ -2,13 +2,11 @@
 
 from functools import lru_cache
 from pathlib import Path
-from typing import Annotated, Any, Literal
-from urllib.parse import quote_plus
+from typing import Annotated, Literal, Self
 from warnings import warn
 
-from pydantic import AnyUrl, BeforeValidator, EmailStr, computed_field, model_validator, SecretStr
+from pydantic import AnyUrl, BeforeValidator, EmailStr, Field, SecretStr, computed_field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from typing_extensions import Self
 
 __all__: tuple[str, ...] = ("Settings", "get_settings")
 
@@ -19,16 +17,16 @@ class Settings(BaseSettings):
     # Common parameters
     PROJECT_NAME: str
     BASE_DIR: Path = Path(__file__).resolve().parents[2]
-    model_config = SettingsConfigDict(env_file=Path(BASE_DIR, ".env"), env_ignore_empty=True, extra="ignore")
+    model_config = SettingsConfigDict(env_ignore_empty=True, extra="ignore")
     ENVIRONMENT: Literal["local", "staging", "production"] = "local"
 
     # Secrets
-    SECRET_KEY: str
+    SECRET_KEY: SecretStr
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 8  # 60 minutes * 24 hours * 8 days = 8 days
 
     # Admin user
     FIRST_SUPERUSER: EmailStr
-    FIRST_SUPERUSER_PASSWORD: str
+    FIRST_SUPERUSER_PASSWORD: SecretStr
 
     # CORS
     @staticmethod
@@ -38,7 +36,7 @@ class Settings(BaseSettings):
 
         :param v: List of strings or comma-separated string.
         :return: List of strings or original value.
-        :raises ValueError: If the value is not a list or comma-separated string.
+        :raises ValueError: If the value is neither a string nor a list.
         """
         if isinstance(v, str) and not v.startswith("["):
             return [i.strip() for i in v.split(",")]
@@ -62,49 +60,36 @@ class Settings(BaseSettings):
 
     # Postgres database
     POSTGRES_SERVER: str
-    POSTGRES_PORT: int = 5432
+    POSTGRES_PORT: int = Field(default=5432, gt=0, le=65535)
     POSTGRES_SOCKET: str | None = None
     POSTGRES_USER: str
-    POSTGRES_PASSWORD: str = ""
+    POSTGRES_PASSWORD: SecretStr = SecretStr("")
     POSTGRES_DB: str = ""
-
-    @computed_field  # type: ignore[prop-decorator]
-    @property
-    def sqlalchemy_database_uri(self) -> str:
-        """
-        Constructs the SQLAlchemy database URI.
-
-        :return: String representation of the database URI.
-        """
-        params: dict[str, Any] = {
-            "username": self.POSTGRES_USER,
-            "password": self.POSTGRES_PASSWORD,
-            "dbname": self.POSTGRES_DB,
-        }
-        if self.ENVIRONMENT == "production" and self.POSTGRES_SOCKET:
-            params["socket_path"] = self.POSTGRES_SOCKET
-        else:
-            params["host"] = self.POSTGRES_SERVER
-            params["port"] = self.POSTGRES_PORT
-        user_info: str = params["username"]
-        if params.get("password"):
-            user_info += f":{quote_plus(string=str(params['password']))}"
-        if "socket_path" in params:
-            socket: str = quote_plus(string=str(params["socket_path"]))
-            return f"postgresql+asyncpg://{user_info}@/{params['dbname']}?host={socket}"
-        return f"postgresql+asyncpg://{user_info}@{params["host"]}:{params["port"]}/{params["dbname"]}"
 
     # Email
     SMTP_TLS: bool = True
     SMTP_SSL: bool = False
-    SMTP_PORT: int = 587
+    SMTP_PORT: int = Field(default=587, gt=0, le=65535)
     SMTP_HOST: str | None = None
     SMTP_USER: str | None = None
     SMTP_PASSWORD: SecretStr | None = None
     EMAILS_FROM_EMAIL: EmailStr | None = None
-    EMAILS_FROM_NAME: EmailStr | None = None
+    EMAILS_FROM_NAME: str | None = None
     EMAIL_RESET_TOKEN_EXPIRE_HOURS: int = 48
+    EMAIL_VERIFY_TOKEN_EXPIRE_HOURS: int = 24
     EMAIL_TEST_USER: EmailStr = "test@example.com"
+
+    @model_validator(mode="after")
+    def _validate_smtp_tls_ssl(self) -> Self:
+        """
+        Ensures SMTP_TLS and SMTP_SSL are not both enabled simultaneously.
+
+        :return: The instance of the model.
+        :raises ValueError: If both SMTP_TLS and SMTP_SSL are True.
+        """
+        if self.SMTP_TLS and self.SMTP_SSL:
+            raise ValueError("SMTP_TLS and SMTP_SSL cannot both be True.")
+        return self
 
     @model_validator(mode="after")
     def _set_default_emails_from(self) -> Self:
@@ -114,7 +99,7 @@ class Settings(BaseSettings):
         :return: The instance of the model.
         """
         if not self.EMAILS_FROM_NAME:
-            self.EMAILS_FROM_NAME = self.PROJECT_NAME  # type: ignore  # pylint: disable=invalid-name
+            self.EMAILS_FROM_NAME = self.PROJECT_NAME
         return self
 
     @computed_field  # type: ignore[prop-decorator]
@@ -128,7 +113,7 @@ class Settings(BaseSettings):
         return bool(self.SMTP_HOST and self.EMAILS_FROM_EMAIL)
 
     # Security checks
-    def _check_default_secret(self, var_name: str, value: str | None) -> None:
+    def _check_default_secret(self, var_name: str, value: SecretStr) -> None:
         """
         Checks if the given secret value is set to the default placeholder 'changethis'.
 
@@ -137,7 +122,7 @@ class Settings(BaseSettings):
         :return: None
         :raises ValueError: If the value is set to the default placeholder and the environment is not 'local'.
         """
-        if value == "changethis":
+        if value.get_secret_value() == "changethis":
             message: str = f"The value of {var_name} is 'changethis', for security, please change it."
             if self.ENVIRONMENT == "local":
                 warn(message=message, stacklevel=1)
@@ -158,10 +143,11 @@ class Settings(BaseSettings):
 
 
 @lru_cache(maxsize=1)
-def get_settings() -> Settings:
+def get_settings(env_file: Path = Path(__file__).resolve().parents[2] / ".env") -> Settings:
     """
     Returns the Settings object. The lru_cache decorator ensures this function is only called once.
 
+    :param env_file: Path to the .env file. Defaults to the standard .env location.
     :return: Settings object.
     """
-    return Settings()  # type: ignore[call-arg]
+    return Settings(_env_file=env_file)  # type: ignore[call-arg]

@@ -2,19 +2,17 @@
 
 from asyncio import run
 
-# noinspection PyProtectedMember
-from loguru._logger import Logger
+from loguru import logger
 from sqlmodel import SQLModel
 
-from app.core.config import get_settings, Settings
-from app.core.db import get_db_manager, DatabaseManager
-from app.core.log_setup import get_logger
+from app.core.config import Settings, get_settings
+from app.core.db import DatabaseManager, get_db_manager
+from app.core.log_setup import LoggingManager
+from app.core.security import get_security_manager
 from app.crud.user import UserCRUD
-from app.models import UserCreate, User
+from app.models import User, UserCreate
 
-__all__: tuple = ()
-
-logger: Logger = get_logger()
+__all__: tuple[str, ...] = ()
 
 
 class InitialDataGenerator:
@@ -49,15 +47,16 @@ class InitialDataGenerator:
         """
         logger.info("Creating first superuser...")
         async for session in self._db_manager.get_session():
-            user_crud: UserCRUD = UserCRUD(session=session)
-            user: User | None = await user_crud.get_by_email(email=self._settings.FIRST_SUPERUSER)  # type: ignore
+            user_crud: UserCRUD = UserCRUD(session=session, security_manager=get_security_manager())
+            user: User | None = await user_crud.get_by_email(email=self._settings.FIRST_SUPERUSER)
             if not user:
                 user_in: UserCreate = UserCreate(
                     email=self._settings.FIRST_SUPERUSER,
-                    password=self._settings.FIRST_SUPERUSER_PASSWORD,
+                    password=self._settings.FIRST_SUPERUSER_PASSWORD.get_secret_value(),
                     is_superuser=True,
+                    is_email_verified=True,
                 )
-                await user_crud.create(user_create=user_in)
+                await user_crud.create(obj_in=user_in)
                 logger.info("First superuser created.")
             else:
                 logger.info("First superuser already exists. Skipping.")
@@ -79,8 +78,10 @@ async def main() -> None:
     :return: None
     """
     settings: Settings = get_settings()
-    db_manager: DatabaseManager = get_db_manager()
-    generator: InitialDataGenerator = InitialDataGenerator(db_manager=db_manager, settings=settings)
+    LoggingManager(
+        debug=settings.ENVIRONMENT == "local", log_dir=settings.BASE_DIR / "logs", project_name=settings.PROJECT_NAME
+    )
+    generator: InitialDataGenerator = InitialDataGenerator(db_manager=get_db_manager(), settings=settings)
     await generator.run()
 
 

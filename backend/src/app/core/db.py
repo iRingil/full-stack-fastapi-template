@@ -1,13 +1,14 @@
 """Module for managing database connections and sessions."""
 
+from collections.abc import AsyncGenerator
 from functools import lru_cache
-from typing import AsyncGenerator
+from urllib.parse import quote_plus
 
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncEngine
+from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker, create_async_engine
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from app.core.config import get_settings, Settings
+from app.core.config import Settings, get_settings
 
 __all__: tuple[str, ...] = ("DatabaseManager", "get_db_manager")
 
@@ -22,16 +23,36 @@ class DatabaseManager:
         :param settings: The application settings object.
         """
         self._async_engine: AsyncEngine = create_async_engine(
-            url=settings.sqlalchemy_database_uri,
-            # --- Recommendations for GENERAL DB (quota ~45 out of 100) ---
+            url=self._build_database_uri(settings=settings),
+            # Recommendations for GENERAL DB (quota ~45 out of 100)
             pool_size=3,  # Number of 'persistent' connections per worker.
             max_overflow=2,  # Number of 'additional' connections for peaks.
             pool_pre_ping=True,  # Check the connection before use.
-            pool_recycle=1700,  # Recreating 'old' connections.
+            pool_recycle=1800,  # Recreating 'old' connections.
             pool_timeout=30,  # Waiting time for a free connection. (30 seconds)
         )
         self._async_session_factory: async_sessionmaker[AsyncSession] = async_sessionmaker(
             bind=self._async_engine, class_=AsyncSession, expire_on_commit=False
+        )
+
+    @staticmethod
+    def _build_database_uri(settings: Settings) -> str:
+        """
+        Constructs the SQLAlchemy database URI. A Unix socket is used in production when it is configured.
+
+        :param settings: The application settings object.
+        :return: String representation of the database URI.
+        """
+        user_info: str = settings.POSTGRES_USER
+        password: str = settings.POSTGRES_PASSWORD.get_secret_value()
+        if password:
+            user_info += f":{quote_plus(string=password)}"
+        if settings.ENVIRONMENT == "production" and settings.POSTGRES_SOCKET:
+            socket: str = quote_plus(string=settings.POSTGRES_SOCKET)
+            return f"postgresql+asyncpg://{user_info}@/{settings.POSTGRES_DB}?host={socket}"
+        return (
+            f"postgresql+asyncpg://{user_info}@{settings.POSTGRES_SERVER}:{settings.POSTGRES_PORT}/"
+            f"{settings.POSTGRES_DB}"
         )
 
     @property
@@ -43,10 +64,9 @@ class DatabaseManager:
         """
         return self._async_engine
 
-    async def get_session(self) -> AsyncGenerator[AsyncSession, None]:
+    async def get_session(self) -> AsyncGenerator[AsyncSession]:
         """
         Dependency to get a new database session for a request.
-        The session is managed by a middleware and will be closed automatically.
 
         :return: An asynchronous generator yielding a new session.
         """
@@ -60,7 +80,7 @@ class DatabaseManager:
         :return: None
         """
         async with self._async_engine.begin() as conn:
-            await conn.run_sync(lambda sync_conn: sync_conn.execute(text("SELECT 1")))
+            await conn.run_sync(lambda sync_conn: sync_conn.execute(statement=text("SELECT 1")))
 
     async def close_database_connection(self) -> None:
         """

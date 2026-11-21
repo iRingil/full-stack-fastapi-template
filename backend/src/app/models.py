@@ -2,7 +2,8 @@
 
 from uuid import UUID, uuid4
 
-from pydantic import EmailStr
+from pydantic import BaseModel, EmailStr
+from pydantic import Field as PydanticField
 from sqlmodel import Field, Relationship, SQLModel
 
 
@@ -15,8 +16,8 @@ __all__: tuple[str, ...] = (
     "ItemsPublic",
     "Message",
     "NewPassword",
+    "ResendVerificationRequest",
     "Token",
-    "TokenPayload",
     "UpdatePassword",
     "User",
     "UserBase",
@@ -26,6 +27,7 @@ __all__: tuple[str, ...] = (
     "UserUpdate",
     "UserUpdateMe",
     "UsersPublic",
+    "VerifyEmailRequest",
 )
 
 
@@ -36,12 +38,14 @@ class UserBase(SQLModel):
 
     :param email: Email address of the user.
     :param is_active: Whether the user is active or not.
+    :param is_email_verified: Whether the user has confirmed their email address.
     :param is_superuser: Whether the user is a superuser or not.
     :param full_name: Full name of the user (optional).
     """
 
     email: EmailStr = Field(unique=True, index=True, max_length=255)
     is_active: bool = True
+    is_email_verified: bool = False
     is_superuser: bool = False
     full_name: str | None = Field(default=None, max_length=255)
 
@@ -84,7 +88,7 @@ class UserUpdate(UserBase):
     password: str | None = Field(default=None, min_length=8, max_length=40)
 
 
-class UserUpdateMe(SQLModel):
+class UserUpdateMe(BaseModel):
     """
     Model for updating the current user's data.
 
@@ -92,11 +96,11 @@ class UserUpdateMe(SQLModel):
     :param email: Email address of the user (optional).
     """
 
-    full_name: str | None = Field(default=None, max_length=255)
-    email: EmailStr | None = Field(default=None, max_length=255)
+    full_name: str | None = PydanticField(default=None, max_length=255)
+    email: EmailStr | None = PydanticField(default=None, max_length=255)
 
 
-class UpdatePassword(SQLModel):
+class UpdatePassword(BaseModel):
     """
     Model for updating user passwords.
 
@@ -104,8 +108,8 @@ class UpdatePassword(SQLModel):
     :param new_password: New password of the user.
     """
 
-    current_password: str = Field(min_length=8, max_length=40)
-    new_password: str = Field(min_length=8, max_length=40)
+    current_password: str = PydanticField(min_length=8, max_length=40)
+    new_password: str = PydanticField(min_length=8, max_length=40)
 
 
 # Database model, database table inferred from class name
@@ -134,7 +138,7 @@ class UserPublic(UserBase):
     id: UUID
 
 
-class UsersPublic(SQLModel):
+class UsersPublic(BaseModel):
     """
     A model for returning a list of users with pagination.
 
@@ -203,7 +207,7 @@ class ItemPublic(ItemBase):
     owner_id: UUID
 
 
-class ItemsPublic(SQLModel):
+class ItemsPublic(BaseModel):
     """
     A model for returning a list of items with pagination.
 
@@ -216,7 +220,7 @@ class ItemsPublic(SQLModel):
 
 
 # Generic message
-class Message(SQLModel):
+class Message(BaseModel):
     """
     A model for sending simple text messages.
 
@@ -227,7 +231,7 @@ class Message(SQLModel):
 
 
 # JSON payload containing access token
-class Token(SQLModel):
+class Token(BaseModel):
     """
     Response model with JWT access token.
 
@@ -239,18 +243,7 @@ class Token(SQLModel):
     token_type: str = "bearer"
 
 
-# Contents of JWT token
-class TokenPayload(SQLModel):
-    """
-    The content (payload) of a JWT token.
-
-    :param sub: Subject of the token.
-    """
-
-    sub: str | None = None
-
-
-class NewPassword(SQLModel):
+class NewPassword(BaseModel):
     """
     A model for setting a new password using a reset token.
 
@@ -259,4 +252,24 @@ class NewPassword(SQLModel):
     """
 
     token: str
-    new_password: str = Field(min_length=8, max_length=40)
+    new_password: str = PydanticField(min_length=8, max_length=40)
+
+
+class VerifyEmailRequest(BaseModel):
+    """
+    A model for confirming an email address with the token from the verification email.
+
+    :param token: Email verification token.
+    """
+
+    token: str
+
+
+class ResendVerificationRequest(BaseModel):
+    """
+    A model for requesting a new verification email.
+
+    :param email: The email address of the user.
+    """
+
+    email: EmailStr

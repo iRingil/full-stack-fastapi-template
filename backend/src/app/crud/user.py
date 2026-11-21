@@ -1,120 +1,83 @@
 """Module for User CRUD operations for User model."""
 
-from typing import Any, Sequence
-from uuid import UUID
+from typing import Any
 
-from sqlmodel import func, select
-
-# noinspection PyProtectedMember
-from sqlmodel.sql._expression_select_cls import SelectOfScalar
+from pydantic import EmailStr
+from sqlmodel import select
+from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.core.security import SecurityManager, get_security_manager
 from app.crud.base import BaseCRUD
-from app.models import User, UserCreate, UserUpdate, UsersPublic
+from app.models import User, UserCreate, UserPublic, UsersPublic, UserUpdate
 
-__all__: tuple[str] = ("UserCRUD",)
+__all__: tuple[str, ...] = ("UserCRUD",)
 
 
-class UserCRUD(BaseCRUD):
-    """CRUD operations for User model."""
+class UserCRUD(BaseCRUD[User, UserCreate, UserUpdate, UserPublic, UsersPublic]):
+    """CRUD operations for User model: hashes passwords on top of the BaseCRUD implementation."""
 
-    _security: SecurityManager = get_security_manager()
-
-    async def create(self, *, user_create: UserCreate) -> User:
+    def __init__(self, *, session: AsyncSession, security_manager: SecurityManager | None = None) -> None:
         """
-        Create a new user in the database.
+        Initializes the UserCRUD.
 
-        :param user_create: User creation data
-        :return: Created User object
+        :param session: An asynchronous session to perform database operations.
+        :param security_manager: The security manager for password hashing; the application one by default.
         """
-        user_data: dict[str, Any] = user_create.model_dump()
-        hashed_password: str = self._security.get_password_hash(password=user_data["password"])
-        user_obj: User = User(**user_data, hashed_password=hashed_password)
-        self._session.add(instance=user_obj)
+        super().__init__(session=session, model=User, public_schema=UserPublic, public_list_schema=UsersPublic)
+        self._security: SecurityManager = security_manager or get_security_manager()
+
+    async def create(self, *, obj_in: UserCreate, update: dict[str, Any] | None = None) -> User:
+        """
+        Creates a new user, hashing the password before saving.
+
+        :param obj_in: User creation data with a plain password.
+        :param update: Extra values that are not part of the schema.
+        :return: Created User object.
+        """
+        hashed_password: str = self._security.get_password_hash(password=obj_in.password)
+        return await super().create(obj_in=obj_in, update={**(update or {}), "hashed_password": hashed_password})
+
+    async def update(self, *, db_obj: User, obj_in: UserUpdate, update: dict[str, Any] | None = None) -> User:
+        """
+        Updates an existing user; a new password is hashed before saving.
+
+        :param db_obj: User object to update.
+        :param obj_in: User update data.
+        :param update: Extra values that are not part of the schema.
+        :return: Updated User object.
+        """
+        extra_data: dict[str, Any] = dict(update or {})
+        if obj_in.password:
+            extra_data["hashed_password"] = self._security.get_password_hash(password=obj_in.password)
+        # The plain password must never reach the model
+        user_data: dict[str, Any] = obj_in.model_dump(exclude_unset=True, exclude={"password"})
+        db_obj.sqlmodel_update(obj=user_data, update=extra_data)
+        self._session.add(instance=db_obj)
         await self._session.commit()
-        await self._session.refresh(instance=user_obj)
-        return user_obj
+        await self._session.refresh(instance=db_obj)
+        return db_obj
 
-    async def update(self, *, db_user: User, user_in: UserUpdate) -> User:
-        """
-        Update an existing user in the database.
-
-        :param db_user: User object to update
-        :param user_in: User update data
-        :return: Updated User object
-        """
-        user_data: dict[str, Any] = user_in.model_dump(exclude_unset=True)
-        extra_data: dict[str, Any] = {}
-        if user_data.get("password"):
-            password: str = user_data["password"]
-            hashed_password: str = self._security.get_password_hash(password=password)
-            extra_data["hashed_password"] = hashed_password
-            del user_data["password"]
-        db_user.sqlmodel_update(obj=user_data, update=extra_data)
-        self._session.add(instance=db_user)
-        await self._session.commit()
-        await self._session.refresh(instance=db_user)
-        return db_user
-
-    async def get_by_id(self, *, user_id: UUID) -> User | None:
-        """
-        Retrieve a user by their ID.
-
-        :param user_id: The UUID of the user.
-        :return: User object or None if not found.
-        """
-        return await self._session.get(entity=User, ident=user_id)
-
-    async def get_by_email(self, *, email: str) -> User | None:
+    async def get_by_email(self, *, email: str | EmailStr) -> User | None:
         """
         Retrieve a user by email.
 
-        :param email: User's email address
-        :return: User object or None if not found
+        :param email: User's email address.
+        :return: User object or None if not found.
         """
-        statement: SelectOfScalar = select(User).where(User.email == email)  # type: ignore[arg-type]
-        return (await self._session.exec(statement=statement)).first()  # type: ignore[no-any-return]
+        result = await self._session.exec(statement=select(User).where(User.email == email))
+        return result.first()
 
-    async def authenticate(self, *, email: str, password: str) -> User | None:
+    async def authenticate(self, *, email: str | EmailStr, password: str) -> User | None:
         """
         Authenticate a user by email and password.
 
-        :param email: User's email address
-        :param password: User's password
-        :return: Authenticated User object or None if authentication fails
+        :param email: User's email address.
+        :param password: User's password.
+        :return: Authenticated User object or None if authentication fails.
         """
         db_user: User | None = await self.get_by_email(email=email)
         if not db_user:
             return None
         if not self._security.verify_password(plain_password=password, hashed_password=db_user.hashed_password):
             return None
-        return db_user
-
-    async def get_multi(self, *, skip: int = 0, limit: int = 100) -> UsersPublic:
-        """
-        Retrieve multiple users from the database (for superusers).
-
-        :param skip: The number of users to skip from the start of the query.
-        :param limit: The maximum number of users to return.
-        :return: A UsersPublic object containing a list of users and the total count of users.
-        """
-        count_statement: SelectOfScalar = (  # type: ignore[arg-type]
-            select(func.count()).select_from(User)  # pylint: disable=not-callable
-        )
-        count: int = (await self._session.exec(statement=count_statement)).one()
-        statement: SelectOfScalar = select(User).offset(skip).limit(limit)
-        users: Sequence = (await self._session.exec(statement=statement)).all()
-        return UsersPublic(data=users, count=count)
-
-    async def remove(self, *, user_id: UUID) -> User | None:
-        """
-        Deletes a user from the database.
-
-        :param user_id: The UUID of the user to delete.
-        :return: The deleted User object, or None if no user was found.
-        """
-        db_user: User | None = await self.get_by_id(user_id=user_id)
-        if db_user:
-            await self._session.delete(instance=db_user)
-            await self._session.commit()
         return db_user

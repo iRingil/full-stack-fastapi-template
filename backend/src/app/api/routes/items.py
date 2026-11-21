@@ -6,10 +6,10 @@ from uuid import UUID
 from fastapi import APIRouter, HTTPException, Path, status
 from fastapi_utils.cbv import cbv
 
-from app.api.deps import CurrentUser, ItemCrudDep, OptionalCurrentUser
+from app.api.deps import ItemCrudDep, OptionalCurrentUser
 from app.models import Item, ItemCreate, ItemPublic, ItemsPublic, ItemUpdate, Message
 
-__all__: tuple[str] = ("items_router",)
+__all__: tuple[str, ...] = ("items_router",)
 
 
 ItemIdDep = Annotated[UUID, Path(alias="id", description="Item ID")]
@@ -29,7 +29,7 @@ class ItemsRouter:
         :param current_user: Dependency for the current authorized user.
         """
         self._item_crud: ItemCrudDep = item_crud
-        self._current_user: CurrentUser = current_user
+        self._current_user: OptionalCurrentUser = current_user
 
     async def _get_and_validate_item(self, item_id: UUID) -> Item:
         """
@@ -41,7 +41,7 @@ class ItemsRouter:
         """
         if not self._current_user:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
-        db_item: Item = await self._item_crud.get(item_id=item_id)
+        db_item: Item | None = await self._item_crud.get_by_id(obj_id=item_id)
         if not db_item:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Item not found")
         if not self._current_user.is_superuser and (db_item.owner_id != self._current_user.id):
@@ -67,9 +67,7 @@ class ItemsRouter:
         if self._current_user.is_superuser:
             items: ItemsPublic = await self._item_crud.get_multi(skip=skip, limit=limit)
         else:
-            items = await self._item_crud.get_multi_by_owner(
-                owner_id=self._current_user.id, skip=skip, limit=limit
-            )
+            items = await self._item_crud.get_multi_by_owner(owner_id=self._current_user.id, skip=skip, limit=limit)
         return items
 
     @items_router.post(
@@ -114,7 +112,7 @@ class ItemsRouter:
         :return: The updated item.
         """
         db_item: Item = await self._get_and_validate_item(item_id=item_id)
-        return await self._item_crud.update(db_item=db_item, item_in=item_in)
+        return await self._item_crud.update(db_obj=db_item, obj_in=item_in)
 
     @items_router.delete(path="/{id}", response_model=Message, summary="Delete Item", description="Deleting an Item.")
     async def delete_item(self, item_id: ItemIdDep) -> Message:
@@ -125,5 +123,5 @@ class ItemsRouter:
         :return: A message confirming the deletion.
         """
         await self._get_and_validate_item(item_id=item_id)
-        await self._item_crud.remove(item_id=item_id)
+        await self._item_crud.delete(obj_id=item_id)
         return Message(message="Item deleted successfully")

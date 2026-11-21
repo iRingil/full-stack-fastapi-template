@@ -1,56 +1,12 @@
 """Module for configuring logging in the application."""
 
 import logging
-from functools import lru_cache
 from pathlib import Path
 from sys import stderr
 
 from loguru import logger
 
-# noinspection PyProtectedMember
-from loguru._logger import Logger
-
-from app.core.config import get_settings, Settings
-
-__all__: tuple[str, ...] = ("get_logger", "InterceptHandler")
-
-
-class LoggingManager:
-    """Performs logging settings in the application."""
-
-    def __init__(self, settings: Settings) -> None:
-        """
-        Initializes the logging manager.
-
-        :param settings: Settings instance.
-        """
-        self._settings: Settings = settings
-        self.logger: Logger = logger  # type: ignore[assignment]
-        self.logger.remove()
-        debug: bool = self._settings.ENVIRONMENT == "local"
-        # Forming the log format
-        time_format: str = "<green>{time:YYYY-MM-DD HH:mm:ss}</green>"
-        level_format: str = "<level>{level: <8}</level>"
-        # Add detailed information only in DEBUG mode
-        debug_info_format: str = "<cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> | " if debug else ""
-        message_format: str = "<level>{message}</level>"
-        # Assembling the final format for the console
-        console_format: str = f"{time_format} | {level_format} | {debug_info_format}{message_format}"
-        # Determine the logging level depending on the mode
-        log_level: int = logging.DEBUG if debug else logging.INFO
-        # Configuring the 'receiver' for the console
-        logger.add(sink=stderr, level=log_level, format=console_format, colorize=True)
-        # Configuring the 'receiver' for the file
-        log_dir: Path = Path(self._settings.BASE_DIR, "logs")
-        log_dir.mkdir(exist_ok=True)
-        logger.add(
-            sink=Path(log_dir, f"{self._settings.PROJECT_NAME.replace(' ', '_').lower()}.log"),
-            level=log_level,
-            format="{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {name}:{function}:{line} | {message}",
-            encoding="utf-8",
-            enqueue=True,  # Makes logging asynchronous
-            backtrace=True,
-        )
+__all__: tuple[str, ...] = ("InterceptHandler", "LoggingManager")
 
 
 class InterceptHandler(logging.Handler):
@@ -74,12 +30,51 @@ class InterceptHandler(logging.Handler):
         logger.opt(depth=depth, exception=record.exc_info).log(level, record.getMessage())
 
 
-@lru_cache(maxsize=1)
-def get_logger() -> Logger:
-    """
-    Gets the Logger object. The lru_cache decorator ensures this function is only called once.
+class LoggingManager:
+    """Performs logging settings in the application."""
 
-    :return: An instance of Logger.
-    """
-    LoggingManager(settings=get_settings())
-    return logger  # type: ignore[return-value]
+    def __init__(self, *, debug: bool, log_dir: Path, project_name: str) -> None:
+        """
+        Initializes the logging manager.
+
+        :param debug: Enables debug-level logging and detailed formatting if True.
+        :param log_dir: Path to the directory where logs will be stored.
+        :param project_name: Name of the project, used as the log file name.
+        """
+        logger.remove()
+        # Forming the log format
+        time_format: str = "<green>{time:YYYY-MM-DD HH:mm:ss}</green>"
+        level_format: str = "<level>{level: <8}</level>"
+        # Add detailed information only in DEBUG mode
+        debug_info_format: str = "<cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> | " if debug else ""
+        message_format: str = "<level>{message}</level>"
+        # Assembling the final format for the console
+        console_format: str = f"{time_format} | {level_format} | {debug_info_format}{message_format}"
+        # Determine the logging level depending on the mode
+        log_level: int = logging.DEBUG if debug else logging.INFO
+        # Configuring the 'receiver' for the console
+        logger.add(sink=stderr, level=log_level, format=console_format, colorize=True)
+        # Configuring the 'receiver' for the file
+        log_dir.mkdir(parents=True, exist_ok=True)
+        logger.add(
+            sink=log_dir / f"{project_name.replace(' ', '_').lower()}.log",
+            level=log_level,
+            format="{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {name}:{function}:{line} | {message}",
+            encoding="utf-8",
+            enqueue=True,  # Makes logging asynchronous
+            backtrace=True,
+            diagnose=debug,  # Variable values in tracebacks may contain secrets, so only in DEBUG mode
+        )
+        self._setup_intercept_handler(log_level=log_level)
+
+    @staticmethod
+    def _setup_intercept_handler(log_level: int) -> None:
+        """
+        Sets up the InterceptHandler to redirect standard logging (root logger) to Loguru.
+
+        :param log_level: The logging level to set for the standard logger.
+        :return: None
+        """
+        standard_logger: logging.Logger = logging.getLogger()
+        standard_logger.handlers = [InterceptHandler()]
+        standard_logger.setLevel(level=log_level)

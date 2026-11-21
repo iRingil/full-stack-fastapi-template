@@ -30,3 +30,16 @@ loggers:
     handlers: [intercept]
     level: INFO
     propagate: no
+  # The same for gunicorn when it runs uvicorn workers on a server
+  gunicorn:
+    handlers: [intercept]
+    level: INFO
+    propagate: no
+  gunicorn.error:
+    handlers: [intercept]
+    level: INFO
+    propagate: no
+  gunicorn.access:
+    handlers: [intercept]
+    level: INFO
+    propagate: no
