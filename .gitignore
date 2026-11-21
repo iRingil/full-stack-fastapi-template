@@ -1,7 +1,7 @@
 ### Claude Code
 .claude/
 
-### ReactNative template
+### React Native template
 # React Native Stack Base
 .expo
 __generated__
@@ -127,7 +127,7 @@ fabric.properties
 # Editor-based Rest Client
 .idea/httpRequests
 
-# Android studio 3.1+ serialized cache file
+# Android Studio 3.1+ serialized cache file
 .idea/caches/build_file_checksums.ser
 
 ### Python template
@@ -141,6 +141,8 @@ __pycache__/
 
 # Distribution / packaging
 build/
+# Compiled email templates are used by the backend at runtime
+!backend/src/app/email-templates/build/
 develop-eggs/
 dist/
 downloads/
@@ -159,8 +161,8 @@ share/python-wheels/
 MANIFEST
 
 # PyInstaller
-#  Usually these files are written by a python script from a template
-#  before PyInstaller builds the exe, so as to inject date/other infos into it.
+#  Usually these files are written by a Python script from a template
+#  before PyInstaller builds the exe, to inject date/other infos into it.
 *.manifest
 *.spec
 
@@ -249,6 +251,7 @@ cython_debug/
 #  and can be added to the global gitignore or merged into this file.  For a more nuclear
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 .idea/
+.run/
 
 # Vite
 .vite
@@ -256,4 +259,3 @@ frontend/coverage
 
 # TanStack Router
 routeTree.gen.ts
-
