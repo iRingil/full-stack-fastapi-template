@@ -59,6 +59,8 @@ branch = true
 concurrency = ["greenlet", "thread"]
 
 [tool.coverage.report]
+# Every run with --cov fails below 100% of the lines and branches of src (locally and in CI)
+fail_under = 100
 # src/ directories without __init__.py are still counted in the report.
 include_namespace_packages = true
 # A file marked "# pragma: exclude file" (scripts run by hand or by the server only) counts as covered.

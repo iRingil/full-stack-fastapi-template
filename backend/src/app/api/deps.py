@@ -53,7 +53,7 @@ OptionalTokenDep = Annotated[str | None, Depends(_reusable_oauth2_optional)]
 
 
 # 3. Derived dependencies
-async def _get_session(db_manager: DbManagerDep) -> AsyncGenerator[AsyncSession]:  # pragma: no cover
+async def _get_session(db_manager: DbManagerDep) -> AsyncGenerator[AsyncSession]:
     """
     Dependency to get a database session.
 
