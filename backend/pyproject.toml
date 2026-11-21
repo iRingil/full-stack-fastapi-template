@@ -33,7 +33,7 @@ root = "src"
 # Mocks are untyped: Any/unknown values and protected access are expected in tests
 [[tool.basedpyright.executionEnvironments]]
 root = "tests"
-extraPaths = ["src"]
+extraPaths = ["src", "."]
 reportAny = false
 reportExplicitAny = false
 reportPrivateUsage = false
@@ -55,6 +55,8 @@ asyncio_default_fixture_loop_scope = "function"
 [tool.coverage.run]
 source = ["src"]
 branch = true
+# SQLAlchemy async runs the database calls in greenlets: without this, lines after an await look uncovered
+concurrency = ["greenlet", "thread"]
 
 [tool.coverage.report]
 # src/ directories without __init__.py are still counted in the report.
