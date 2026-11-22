@@ -4,8 +4,6 @@
  * and this component owns which one is open.
  */
 
-"use client"
-
 import { Button, Dropdown, Label } from "@heroui/react"
 import { useTranslations } from "next-intl"
 import { type Key, type ReactNode, useState } from "react"

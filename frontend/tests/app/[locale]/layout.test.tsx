@@ -3,7 +3,8 @@ import type { ReactElement } from "react"
 import { describe, expect, it, vi } from "vitest"
 import LocaleLayout, { generateMetadata, generateStaticParams, viewport } from "@/app/[locale]/layout"
 
-// noinspection JSUnusedGlobalSymbols - the mocked module export
+// The mocked module export
+// noinspection JSUnusedGlobalSymbols
 vi.mock("next/font/google", () => ({ Onest: () => ({ variable: "font-onest" }) }))
 
 describe("LocaleLayout", () => {

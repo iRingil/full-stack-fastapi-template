@@ -2,8 +2,6 @@
  * @file A password field bound to react-hook-form, with a show/hide toggle.
  */
 
-"use client"
-
 import { Button, Description, FieldError, InputGroup, Label, TextField } from "@heroui/react"
 import { useTranslations } from "next-intl"
 import { type ReactNode, useState } from "react"

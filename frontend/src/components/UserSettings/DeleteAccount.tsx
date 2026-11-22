@@ -2,8 +2,6 @@
  * @file Settings tab "Danger zone": deletes the account and everything it owns, then logs out.
  */
 
-"use client"
-
 import { Button } from "@heroui/react"
 import { useMutation } from "@tanstack/react-query"
 import { useTranslations } from "next-intl"

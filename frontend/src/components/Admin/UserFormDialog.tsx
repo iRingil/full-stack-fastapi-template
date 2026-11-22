@@ -2,8 +2,6 @@
  * @file The admin's user form in a dialog, shared by "add" and "edit".
  */
 
-"use client"
-
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useTranslations } from "next-intl"
 import { type ReactNode, useEffect } from "react"

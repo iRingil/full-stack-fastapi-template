@@ -2,8 +2,6 @@
  * @file A HeroUI text field bound to a react-hook-form field (value, blur, error message).
  */
 
-"use client"
-
 import { Description, FieldError, Input, Label, TextArea, TextField } from "@heroui/react"
 import type { ReactNode } from "react"
 import { type Control, type FieldPath, type FieldValues, useController } from "react-hook-form"

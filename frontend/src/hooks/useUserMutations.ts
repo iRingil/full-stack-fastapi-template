@@ -2,8 +2,6 @@
  * @file The admin's create, update and delete of users; each refreshes the user lists and reports in a toast.
  */
 
-"use client"
-
 import { type QueryClient, useMutation, useQueryClient } from "@tanstack/react-query"
 import { useTranslations } from "next-intl"
 import {
@@ -31,7 +29,8 @@ export function useUserMutations(): {
   const t = useTranslations("Admin")
   const notify = useNotify()
   const queryClient: QueryClient = useQueryClient()
-  // noinspection JSUnusedGlobalSymbols - spread into the useMutation options below
+  // Spread into the useMutation options below
+  // noinspection JSUnusedGlobalSymbols
   const callbacks = {
     onError: notify.error,
     onSettled: async (): Promise<void> => {

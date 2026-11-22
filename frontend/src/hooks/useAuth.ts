@@ -2,8 +2,6 @@
  * @file Login, logout and the current user.
  */
 
-"use client"
-
 import {
   type QueryClient,
   type UseMutationResult,

@@ -1,4 +1,5 @@
-// noinspection JSUnusedGlobalSymbols - the mocks implement what the mocked modules export
+// noinspection JSUnusedGlobalSymbols
+// (file-wide: the mocks implement what the mocked modules export)
 /**
  * @file Global test setup: jest-dom matchers, mocked navigation, an absolute API base URL and cleanup.
  */
@@ -21,15 +22,14 @@ globalThis.ResizeObserver ??= class {
 
 // jsdom lacks matchMedia, which next-themes reads for the system theme (node-environment tests have no window)
 if (typeof window !== "undefined") {
+  // addListener/removeListener are deprecated, but next-themes still subscribes with them
+  // noinspection JSDeprecatedSymbols
   window.matchMedia ??= (query: string): MediaQueryList =>
     ({
       matches: false,
       media: query,
       onchange: null,
-      // Deprecated, but next-themes still subscribes with it
-      // noinspection JSDeprecatedSymbols
       addListener: () => undefined,
-      // noinspection JSDeprecatedSymbols
       removeListener: () => undefined,
       addEventListener: () => undefined,
       removeEventListener: () => undefined,

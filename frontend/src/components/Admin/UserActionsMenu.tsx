@@ -2,8 +2,6 @@
  * @file The "…" menu of a user row: edit and delete (Action-Dialog pattern, see `Items/ItemActionsMenu.tsx`).
  */
 
-"use client"
-
 import { Button, Dropdown, Label } from "@heroui/react"
 import { useTranslations } from "next-intl"
 import { type Key, type ReactNode, useState } from "react"

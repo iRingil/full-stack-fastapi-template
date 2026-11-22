@@ -4,8 +4,6 @@
  * the password is recovered through.
  */
 
-"use client"
-
 import { Button } from "@heroui/react"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { type QueryClient, useMutation, useQueryClient } from "@tanstack/react-query"

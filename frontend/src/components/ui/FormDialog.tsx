@@ -2,8 +2,6 @@
  * @file A controlled modal with a form: heading, fields, cancel and submit buttons.
  */
 
-"use client"
-
 import { Button, Modal } from "@heroui/react"
 import { useTranslations } from "next-intl"
 import type { ReactNode, SubmitEventHandler } from "react"

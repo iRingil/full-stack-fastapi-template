@@ -7,7 +7,8 @@ of a breached-passwords corpus) when the deployment needs it.
 
 __all__: tuple[str, ...] = ("COMMON_PASSWORDS",)
 
-# noinspection SpellCheckingInspection - the passwords are not words
+# The passwords are not words
+# noinspection SpellCheckingInspection
 COMMON_PASSWORDS: frozenset[str] = frozenset(
     {
         "00000000",

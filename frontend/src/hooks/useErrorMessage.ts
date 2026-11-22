@@ -2,8 +2,6 @@
  * @file Hook that turns a failed request into a message in the user's language.
  */
 
-"use client"
-
 import { useTranslations } from "next-intl"
 import { errorKey } from "@/lib/api-error"
 

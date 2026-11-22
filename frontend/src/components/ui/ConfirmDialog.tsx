@@ -2,8 +2,6 @@
  * @file A controlled confirmation dialog for destructive actions (delete an item, a user, the account).
  */
 
-"use client"
-
 import { AlertDialog, Button } from "@heroui/react"
 import { useTranslations } from "next-intl"
 import type { ReactNode } from "react"

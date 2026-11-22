@@ -2,8 +2,6 @@
  * @file The user's menu in the header: who is logged in, a link to the settings and logout.
  */
 
-"use client"
-
 import { Avatar, Button, Dropdown, Label } from "@heroui/react"
 import { useTranslations } from "next-intl"
 import type { Key, ReactNode } from "react"

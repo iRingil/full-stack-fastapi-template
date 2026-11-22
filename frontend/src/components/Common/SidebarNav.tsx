@@ -3,8 +3,6 @@
  * leads back to the public site.
  */
 
-"use client"
-
 import { cn } from "@heroui/react"
 import { useTranslations } from "next-intl"
 import type { ReactNode } from "react"

@@ -2,8 +2,6 @@
  * @file Create, update and delete items; each refreshes the item lists and reports the result in a toast.
  */
 
-"use client"
-
 import { type QueryClient, useMutation, useQueryClient } from "@tanstack/react-query"
 import { useTranslations } from "next-intl"
 import {
@@ -30,7 +28,8 @@ export function useItemMutations(): {
   const t = useTranslations("Items")
   const notify = useNotify()
   const queryClient: QueryClient = useQueryClient()
-  // noinspection JSUnusedGlobalSymbols - spread into the useMutation options below
+  // Spread into the useMutation options below
+  // noinspection JSUnusedGlobalSymbols
   const callbacks = {
     onError: notify.error,
     onSettled: (): Promise<void> => queryClient.invalidateQueries({ queryKey: readItemsQueryKey() }),

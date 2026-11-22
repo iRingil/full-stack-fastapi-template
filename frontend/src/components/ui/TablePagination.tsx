@@ -2,8 +2,6 @@
  * @file Pagination for tables: "first … around the current … last" page links with previous/next.
  */
 
-"use client"
-
 import { Pagination } from "@heroui/react"
 import { useTranslations } from "next-intl"
 import type { ReactNode } from "react"

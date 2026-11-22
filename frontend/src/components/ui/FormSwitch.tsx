@@ -2,8 +2,6 @@
  * @file A HeroUI switch bound to a boolean react-hook-form field.
  */
 
-"use client"
-
 import { Description, Switch } from "@heroui/react"
 import type { ReactNode } from "react"
 import { type Control, type FieldPath, type FieldValues, useController } from "react-hook-form"

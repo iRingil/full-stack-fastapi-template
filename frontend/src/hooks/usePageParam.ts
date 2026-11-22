@@ -2,8 +2,6 @@
  * @file The current table page, kept in the `?page=` query parameter (shareable, survives reload).
  */
 
-"use client"
-
 import { useSearchParams } from "next/navigation"
 import { usePathname, useRouter } from "@/i18n/navigation"
 

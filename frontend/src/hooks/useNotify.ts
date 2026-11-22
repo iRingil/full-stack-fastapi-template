@@ -2,8 +2,6 @@
  * @file Toast notifications with the app's wording.
  */
 
-"use client"
-
 import { toast } from "@heroui/react"
 import { useTranslations } from "next-intl"
 import { isUnauthorized } from "@/lib/query-client"

@@ -4,8 +4,6 @@
  * after the change the user is sent to the login page.
  */
 
-"use client"
-
 import { Button } from "@heroui/react"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useMutation } from "@tanstack/react-query"

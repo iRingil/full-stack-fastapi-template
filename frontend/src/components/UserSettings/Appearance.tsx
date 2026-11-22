@@ -2,8 +2,6 @@
  * @file Settings tab "Appearance": light, dark or the system theme.
  */
 
-"use client"
-
 import { Label, Radio, RadioGroup, useIsHydrated } from "@heroui/react"
 import { useTranslations } from "next-intl"
 import { useTheme } from "next-themes"
