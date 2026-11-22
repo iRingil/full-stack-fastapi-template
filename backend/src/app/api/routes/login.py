@@ -7,11 +7,15 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from fastapi.responses import HTMLResponse
 from fastapi.security import OAuth2PasswordRequestForm
 from fastapi_utils.cbv import cbv
+from pydantic import EmailStr, TypeAdapter, ValidationError
 
 from app.api.deps import (
     CurrentSuperuser,
     CurrentUser,
     EmailManagerDep,
+    FailedLoginsDep,
+    LoginRateLimiter,
+    PasswordRecoveryRateLimiter,
     ResendVerificationRateLimiter,
     SecurityManagerDep,
     SettingsDep,
@@ -20,6 +24,7 @@ from app.api.deps import (
 from app.models import (
     Message,
     NewPassword,
+    PasswordRecoveryRequest,
     ResendVerificationRequest,
     Token,
     User,
@@ -35,6 +40,7 @@ __all__: tuple[str, ...] = ("login_router",)
 
 
 OAuthFormDep = Annotated[OAuth2PasswordRequestForm, Depends()]
+_EMAIL: TypeAdapter[EmailStr] = TypeAdapter(EmailStr)
 
 login_router: APIRouter = APIRouter()
 
@@ -54,10 +60,16 @@ class LoginRouter:
     @login_router.post(
         path="/login/access-token",
         summary="Login for Access Token",
-        description="OAuth2 compatible token login, get an access token for future requests.",
+        description="OAuth2 compatible token login, get an access token for future requests. "
+        "Limited to 10 requests per minute per IP address and to 5 failed attempts per 15 minutes per account.",
+        dependencies=[LoginRateLimiter],
     )
     async def login_access_token(
-        self, form_data: OAuthFormDep, security_manager: SecurityManagerDep, settings: SettingsDep
+        self,
+        form_data: OAuthFormDep,
+        security_manager: SecurityManagerDep,
+        settings: SettingsDep,
+        failed_logins: FailedLoginsDep,
     ) -> Token:
         """
         Endpoint for user login to obtain an access token.
@@ -65,18 +77,48 @@ class LoginRouter:
         :param form_data: The OAuth2 password request form data (username and password).
         :param security_manager: Dependency for security-related operations.
         :param settings: The application settings dependency.
+        :param failed_logins: The counter of failed logins per account.
         :return: An access token.
-        :raises HTTPException: If login details are incorrect or the user is inactive.
+        :raises HTTPException: If login details are incorrect, the user is inactive or the attempts are used up.
         """
-        user: User | None = await self._user_crud.authenticate(email=form_data.username, password=form_data.password)
+        try:
+            email: str = _EMAIL.validate_python(form_data.username).lower()
+        except ValidationError as exc:
+            # Not an email address at all: no account to look up (and nothing PostgreSQL could not store)
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Incorrect email or password") from exc
+        if failed_logins.is_exceeded(key=email):
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="Too many failed login attempts. Please try again later.",
+            )
+        user: User | None = await self._user_crud.authenticate(email=email, password=form_data.password)
         if not user:
+            failed_logins.add(key=email)
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Incorrect email or password")
         if not user.is_active:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Inactive user")
+        failed_logins.clear(key=email)
         access_token_expires: timedelta = timedelta(minutes=settings.security.access_token_expire_minutes)
         return Token(
-            access_token=security_manager.create_access_token(subject=str(user.id), expires_delta=access_token_expires)
+            access_token=security_manager.create_access_token(
+                subject=str(user.id), expires_delta=access_token_expires, version=user.token_version
+            )
         )
+
+    @login_router.post(
+        path="/logout",
+        summary="Logout",
+        description="Revoke the access tokens of the current user: a logout from all devices.",
+    )
+    async def logout(self, current_user: CurrentUser) -> Message:
+        """
+        Endpoint to log the current user out: every access token issued so far stops working.
+
+        :param current_user: The currently authenticated user.
+        :return: A confirmation message.
+        """
+        await self._user_crud.revoke_tokens(db_obj=current_user)
+        return Message(message="Logged out")
 
     @login_router.post(
         path="/login/test-token",
@@ -94,26 +136,30 @@ class LoginRouter:
         return current_user
 
     @login_router.post(
-        path="/password-recovery/{email}",
+        path="/password-recovery/",
         summary="Recover Password",
-        description="Send a password recovery email.",
+        description="Send a password recovery email. Limited to 3 requests per minute per IP address.",
+        dependencies=[PasswordRecoveryRateLimiter],
     )
     async def recover_password(
-        self, email: str, background_tasks: BackgroundTasks, email_manager: EmailManagerDep
+        self, body: PasswordRecoveryRequest, background_tasks: BackgroundTasks, email_manager: EmailManagerDep
     ) -> Message:
         """
         Endpoint to initiate password recovery for a user.
 
         The answer is the same whether the user exists or not, so that it does not reveal registered emails.
+        The address travels in the body, not in the URL: URLs end up in access logs.
 
-        :param email: The email address of the user.
+        :param body: The request body containing the email address of the user.
         :param background_tasks: The background tasks service.
         :param email_manager: The email manager dependency.
         :return: A confirmation message.
         """
-        user: User | None = await self._user_crud.get_by_email(email=email)
+        user: User | None = await self._user_crud.get_by_email(email=body.email)
         if user:
-            background_tasks.add_task(email_manager.send_reset_password_email, email_to=user.email)
+            background_tasks.add_task(
+                email_manager.send_reset_password_email, email_to=user.email, version=user.token_version
+            )
         return Message(message="If an account with that email exists, a recovery email has been sent.")
 
     @login_router.post(
@@ -130,9 +176,10 @@ class LoginRouter:
         :return: A confirmation message.
         :raises HTTPException: If the token is invalid, the user is not found or inactive.
         """
-        email: str | None = email_manager.verify_password_reset_token(token=body.token)
-        if not email:
+        claims: tuple[str, int] | None = email_manager.verify_password_reset_token(token=body.token)
+        if not claims:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid token")
+        email, version = claims
         user: User | None = await self._user_crud.get_by_email(email=email)
         if not user:
             raise HTTPException(
@@ -140,6 +187,9 @@ class LoginRouter:
             )
         if not user.is_active:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Inactive user")
+        # A used link, or one sent before the password was last changed: the new password raised the version
+        if version != user.token_version:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid token")
         # The link from the email proves that the user owns the address
         await self._user_crud.update(
             db_obj=user, obj_in=UserUpdate(password=body.new_password), update={"is_email_verified": True}
@@ -202,21 +252,24 @@ class LoginRouter:
         )
 
     @login_router.post(
-        path="/password-recovery-html-content/{email}",
+        path="/password-recovery-html-content/",
         response_class=HTMLResponse,
         summary="Get Password Recovery HTML Content",
         description="Get the HTML content of a password recovery email for preview (superusers only).",
     )
     async def recover_password_html_content(
-        self, email: str, _: CurrentSuperuser, email_manager: EmailManagerDep
+        self, body: PasswordRecoveryRequest, _: CurrentSuperuser, email_manager: EmailManagerDep
     ) -> HTMLResponse:
         """
         Endpoint to get the HTML content of a password recovery email.
 
-        :param email: The email address to generate the content for.
+        :param body: The request body containing the email address to generate the content for.
         :param _: The superuser dependency to enforce permissions.
         :param email_manager: The email manager dependency.
         :return: An HTML response with the email content.
         """
-        letter: Letter = await email_manager.render_reset_password_email(email_to=email)
+        user: User | None = await self._user_crud.get_by_email(email=body.email)
+        letter: Letter = await email_manager.render_reset_password_email(
+            email_to=body.email, version=user.token_version if user else 0
+        )
         return HTMLResponse(content=letter.html, headers={"subject": letter.subject})

@@ -14,9 +14,9 @@ import type { UserPublic } from "@/client/types.gen"
 import { FormAlert } from "@/components/ui/FormAlert"
 import { TablePagination } from "@/components/ui/TablePagination"
 import { useCurrentUser } from "@/hooks/useAuth"
+import { useErrorMessage } from "@/hooks/useErrorMessage"
 import { usePageParam } from "@/hooks/usePageParam"
 import { useUserMutations } from "@/hooks/useUserMutations"
-import { errorMessage } from "@/lib/api-error"
 import { UserActionsMenu } from "./UserActionsMenu"
 import { UserFormDialog } from "./UserFormDialog"
 
@@ -34,6 +34,7 @@ export function UsersView(): ReactNode {
   const [page, setPage] = usePageParam()
   const [isAddOpen, setAddOpen] = useState<boolean>(false)
   const { create } = useUserMutations()
+  const errorMessage = useErrorMessage()
   const { data, error, isPending, isPlaceholderData } = useQuery({
     ...readUsersOptions({ query: { skip: (page - 1) * USERS_PAGE_SIZE, limit: USERS_PAGE_SIZE } }),
     placeholderData: keepPreviousData,
@@ -49,9 +50,12 @@ export function UsersView(): ReactNode {
 
   if (currentUser && !isSuperuser) {
     return (
-      <FormAlert status="warning" title={t("forbiddenTitle")}>
-        {t("forbiddenDescription")}
-      </FormAlert>
+      <section className="flex flex-col gap-6">
+        <h1 className="text-2xl font-semibold">{t("title")}</h1>
+        <FormAlert status="warning" title={t("forbiddenTitle")}>
+          {t("forbiddenDescription")}
+        </FormAlert>
+      </section>
     )
   }
 
@@ -65,7 +69,7 @@ export function UsersView(): ReactNode {
         </Button>
       </div>
 
-      {error ? <FormAlert>{errorMessage(error, tc("errorGeneric"))}</FormAlert> : null}
+      {error ? <FormAlert>{errorMessage(error)}</FormAlert> : null}
 
       <Table>
         <Table.ScrollContainer>

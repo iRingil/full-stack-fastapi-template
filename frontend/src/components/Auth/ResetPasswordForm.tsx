@@ -15,8 +15,8 @@ import { resetPasswordMutation } from "@/client/@tanstack/react-query.gen"
 import { FormAlert } from "@/components/ui/FormAlert"
 import { FormPasswordField } from "@/components/ui/FormPasswordField"
 import { LinkButton } from "@/components/ui/LinkButton"
+import { useErrorMessage } from "@/hooks/useErrorMessage"
 import { Link } from "@/i18n/navigation"
-import { errorMessage } from "@/lib/api-error"
 import { resetPasswordSchema } from "@/lib/validation"
 import { AuthCard } from "./AuthCard"
 
@@ -30,6 +30,7 @@ export function ResetPasswordForm(): ReactNode {
   const tv = useTranslations("Validation")
   const token: string | null = useSearchParams().get("token")
   const reset = useMutation(resetPasswordMutation())
+  const errorMessage = useErrorMessage()
   const {
     control,
     handleSubmit,
@@ -64,7 +65,7 @@ export function ResetPasswordForm(): ReactNode {
     try {
       await reset.mutateAsync({ body: { token, new_password: newPassword } })
     } catch (error) {
-      setError("root", { message: errorMessage(error, tc("errorGeneric")) })
+      setError("root", { message: errorMessage(error) })
     }
   })
 

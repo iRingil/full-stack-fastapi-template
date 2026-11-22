@@ -6,7 +6,16 @@ from uuid import UUID
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Path, status
 from fastapi_utils.cbv import cbv
 
-from app.api.deps import CurrentSuperuser, CurrentUser, EmailManagerDep, SecurityManagerDep, UserCrudDep
+from app.api.deps import (
+    CurrentSuperuser,
+    CurrentUser,
+    EmailManagerDep,
+    LimitQuery,
+    SecurityManagerDep,
+    SignupRateLimiter,
+    SkipQuery,
+    UserCrudDep,
+)
 from app.models import (
     Message,
     UpdatePassword,
@@ -43,7 +52,7 @@ class UsersRouter:
         summary="Read Users",
         description="Obtaining a list of users (for superusers only).",
     )
-    async def read_users(self, _: CurrentSuperuser, skip: int = 0, limit: int = 100) -> UsersPublic:
+    async def read_users(self, _: CurrentSuperuser, skip: SkipQuery = 0, limit: LimitQuery = 100) -> UsersPublic:
         """
         Endpoint to retrieve a list of users. Requires superuser privileges.
 
@@ -116,27 +125,37 @@ class UsersRouter:
         current_user: CurrentUser,
         background_tasks: BackgroundTasks,
         email_manager: EmailManagerDep,
+        security_manager: SecurityManagerDep,
     ) -> User:
         """
         Endpoint for the current user to update their own data.
 
-        A changed email address becomes unverified, and a verification email is sent to it.
+        A changed email address becomes unverified, and a verification email is sent to it. Changing the address
+        requires the current password: the address is what the password is recovered through, so a stolen session
+        alone must not be enough to take the account over. The old address is deliberately not notified of the
+        change (decided 2026-11-22): the password check is the protection.
 
         :param user_in: The new data for the user.
         :param current_user: The currently authenticated user.
         :param background_tasks: The background tasks service.
         :param email_manager: The email manager dependency.
+        :param security_manager: The security manager dependency.
         :return: The updated user data.
-        :raises HTTPException: If the user with the given email address already exists in the system.
+        :raises HTTPException: If the current password is missing or wrong when the email changes, or the user
+                               with the given email address already exists in the system.
         """
         email_changed: bool = bool(user_in.email) and user_in.email != current_user.email
         if email_changed:
+            if not user_in.current_password or not security_manager.verify_password(
+                plain_password=user_in.current_password, hashed_password=current_user.hashed_password
+            ):
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Incorrect password")
             existing_user: User | None = await self._user_crud.get_by_email(email=str(user_in.email))
             if existing_user and existing_user.id != current_user.id:
                 raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="User with this email already exists")
         user: User = await self._user_crud.update(
             db_obj=current_user,
-            obj_in=UserUpdate.model_validate(obj=user_in.model_dump(exclude_unset=True)),
+            obj_in=UserUpdate.model_validate(obj=user_in.model_dump(exclude_unset=True, exclude={"current_password"})),
             update={"is_email_verified": False} if email_changed else None,
         )
         if email_changed:
@@ -191,33 +210,34 @@ class UsersRouter:
 
     @users_router.post(
         path="/signup",
-        response_model=UserPublic,
-        status_code=status.HTTP_201_CREATED,
         summary="Register New User",
-        description="New user registration.",
+        description="New user registration. Limited to 5 requests per minute per IP address.",
+        dependencies=[SignupRateLimiter],
     )
     async def register_user(
         self, user_in: UserRegister, background_tasks: BackgroundTasks, email_manager: EmailManagerDep
-    ) -> User:
+    ) -> Message:
         """
         Endpoint for new user registration. Sends a welcome email with an email verification link.
+
+        The answer is the same whether the address is already registered or not, so that it does not reveal
+        registered emails; an existing account is left untouched.
 
         :param user_in: The registration data.
         :param background_tasks: The background tasks service.
         :param email_manager: The email manager dependency.
-        :return: The newly created user.
-        :raises HTTPException: If the user with the given email address already exists in the system.
+        :return: A confirmation message.
         """
         user: User | None = await self._user_crud.get_by_email(email=user_in.email)
-        if user:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail="The user with this email already exists in the system"
+        if not user:
+            new_user: User = await self._user_crud.create(obj_in=UserCreate.model_validate(obj=user_in))
+            background_tasks.add_task(
+                email_manager.send_welcome_email, email_to=new_user.email, username=new_user.full_name or new_user.email
             )
-        new_user: User = await self._user_crud.create(obj_in=UserCreate.model_validate(obj=user_in))
-        background_tasks.add_task(
-            email_manager.send_welcome_email, email_to=new_user.email, username=new_user.full_name or new_user.email
+        return Message(
+            message="If this email is not registered yet, the account has been created "
+            "and a confirmation link has been sent to it."
         )
-        return new_user
 
     @users_router.get(
         path="/{id}", response_model=UserPublic, summary="Read User by ID", description="Retrieving user data by ID."
@@ -246,21 +266,30 @@ class UsersRouter:
         summary="Update User by ID",
         description="Update user by ID (for superusers only).",
     )
-    async def update_user(self, user_id: UserIdDep, user_in: UserUpdate, _: CurrentSuperuser) -> User:
+    async def update_user(self, user_id: UserIdDep, user_in: UserUpdate, current_superuser: CurrentSuperuser) -> User:
         """
         Endpoint to update a user by their ID. Requires superuser privileges.
 
         :param user_id: The ID of the user to update.
         :param user_in: The new data for the user.
-        :param _: The superuser dependency to enforce permissions.
+        :param current_superuser: The currently authenticated superuser.
         :return: The updated user data.
-        :raises HTTPException: If the user with the given ID is not found
-                               or if a user with the same email already exists.
+        :raises HTTPException: If the user with the given ID is not found, a user with the same email already
+                               exists, or superusers try to deactivate or demote themselves.
         """
         db_user: User | None = await self._user_crud.get_by_id(obj_id=user_id)
         if not db_user:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND, detail="The user with this id does not exist in the system"
+            )
+        # As with deletion: the last superuser must not lock everybody out of the administration
+        changes: dict[str, object] = user_in.model_dump(exclude_unset=True)
+        if db_user.id == current_superuser.id and (
+            changes.get("is_active") is False or changes.get("is_superuser") is False
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Super users are not allowed to deactivate or demote themselves",
             )
         if user_in.email:
             existing_user = await self._user_crud.get_by_email(email=user_in.email)

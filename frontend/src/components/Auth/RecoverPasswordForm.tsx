@@ -1,7 +1,7 @@
 /**
  * @file "Forgot password": asks the backend to email a password reset link.
- * @description The answer is the same whether or not the account exists, so the form does not reveal registered
- * emails (the backend answers 404 for an unknown one).
+ * @description The backend answers the same whether or not the account exists, so the form does not reveal
+ * registered emails. The address is sent in the request body: URLs end up in access logs.
  */
 
 "use client"
@@ -15,25 +15,19 @@ import { useForm } from "react-hook-form"
 import { recoverPassword } from "@/client/sdk.gen"
 import { FormAlert } from "@/components/ui/FormAlert"
 import { FormTextField } from "@/components/ui/FormTextField"
+import { useErrorMessage } from "@/hooks/useErrorMessage"
 import { Link } from "@/i18n/navigation"
-import { ApiError, errorMessage } from "@/lib/api-error"
 import { emailSchema } from "@/lib/validation"
 import { AuthCard } from "./AuthCard"
 
 /**
- * Requests the reset email; an unknown address counts as success.
+ * Requests the reset email.
  * @param email - The address.
  * @returns Nothing.
- * @throws {ApiError} For any other failure.
+ * @throws {ApiError} If the request fails.
  */
 export async function requestPasswordReset(email: string): Promise<void> {
-  try {
-    await recoverPassword({ path: { email }, throwOnError: true })
-  } catch (error) {
-    if (!(error instanceof ApiError && error.status === 404)) {
-      throw error
-    }
-  }
+  await recoverPassword({ body: { email }, throwOnError: true })
 }
 
 /**
@@ -45,6 +39,7 @@ export function RecoverPasswordForm(): ReactNode {
   const tc = useTranslations("Common")
   const tv = useTranslations("Validation")
   const recover = useMutation({ mutationFn: requestPasswordReset })
+  const errorMessage = useErrorMessage()
   const {
     control,
     handleSubmit,
@@ -56,7 +51,7 @@ export function RecoverPasswordForm(): ReactNode {
     try {
       await recover.mutateAsync(email)
     } catch (error) {
-      setError("root", { message: errorMessage(error, tc("errorGeneric")) })
+      setError("root", { message: errorMessage(error) })
     }
   })
 

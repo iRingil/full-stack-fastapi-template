@@ -13,6 +13,7 @@ export type FormAlertProps = {
 
 /**
  * Renders the alert, nothing without content.
+ * @description An error is announced by screen readers at once (`role="alert"`), a notice politely (`role="status"`).
  * @param props - The status, title and text.
  * @returns The alert.
  */
@@ -21,7 +22,7 @@ export function FormAlert({ status = "danger", title, children }: FormAlertProps
     return null
   }
   return (
-    <Alert status={status}>
+    <Alert status={status} role={status === "danger" ? "alert" : "status"}>
       <Alert.Indicator />
       <Alert.Content>
         {title ? <Alert.Title>{title}</Alert.Title> : null}

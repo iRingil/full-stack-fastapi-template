@@ -21,6 +21,8 @@ export type FormDialogProps = {
 
 /**
  * Renders the dialog; the parent owns the open state and closes it after the action succeeds.
+ * @description The close button comes last in the markup (it stays in the corner): Tab goes to the fields first.
+ * Give the first field `autoFocus`, so that typing can start as soon as the dialog opens.
  * @param props - The state, texts, the form's submit handler (react-hook-form's `handleSubmit(...)`) and fields.
  * @returns The dialog.
  */
@@ -40,7 +42,6 @@ export function FormDialog({
       <Modal.Container>
         <Modal.Dialog className="sm:max-w-[480px]">
           <form noValidate onSubmit={onSubmit}>
-            <Modal.CloseTrigger />
             <Modal.Header>
               <Modal.Heading>{title}</Modal.Heading>
             </Modal.Header>
@@ -55,6 +56,7 @@ export function FormDialog({
                 {submitLabel}
               </Button>
             </Modal.Footer>
+            <Modal.CloseTrigger aria-label={t("close")} />
           </form>
         </Modal.Dialog>
       </Modal.Container>

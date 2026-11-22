@@ -50,7 +50,7 @@ export default async function HomePage({ params }: LocaleParams): Promise<ReactN
             <h1 className="text-4xl leading-[1.05] font-semibold tracking-tight text-balance md:text-6xl">
               {t("heroTitle")}
             </h1>
-            <p className="mt-6 max-w-xl text-lg text-pretty text-muted">{t("heroDescription")}</p>
+            <p className="mt-6 max-w-xl text-lg text-pretty">{t("heroDescription")}</p>
             <div className="mt-8 flex flex-wrap gap-3">
               <LinkButton href={DASHBOARD_PATH} size="lg">
                 {t("openDashboard")}
@@ -96,7 +96,7 @@ export default async function HomePage({ params }: LocaleParams): Promise<ReactN
                     <Icon aria-hidden className="size-5" />
                   </span>
                   <h3 className="mt-4 font-semibold">{t(`feature_${key}_title`)}</h3>
-                  <p className="mt-2 text-pretty text-muted">{t(`feature_${key}_text`)}</p>
+                  <p className="mt-2 text-pretty">{t(`feature_${key}_text`)}</p>
                 </li>
               ),
             )}

@@ -30,9 +30,9 @@ class TestTokens:
         :param email_manager: The test email manager.
         :return: None
         """
-        reset: str = email_manager.generate_password_reset_token(email="a@example.com")
+        reset: str = email_manager.generate_password_reset_token(email="a@example.com", version=7)
         verify: str = email_manager.generate_email_verify_token(email="a@example.com")
-        assert email_manager.verify_password_reset_token(token=reset) == "a@example.com"
+        assert email_manager.verify_password_reset_token(token=reset) == ("a@example.com", 7)
         assert email_manager.verify_email_verify_token(token=verify) == "a@example.com"
 
     def test_purposes_are_not_interchangeable(
@@ -45,7 +45,7 @@ class TestTokens:
         :param security_manager: The test security manager.
         :return: None
         """
-        reset: str = email_manager.generate_password_reset_token(email="a@example.com")
+        reset: str = email_manager.generate_password_reset_token(email="a@example.com", version=0)
         verify: str = email_manager.generate_email_verify_token(email="a@example.com")
         access: str = security_manager.create_access_token(subject="a@example.com", expires_delta=timedelta(minutes=1))
         assert email_manager.verify_email_verify_token(token=reset) is None
@@ -54,19 +54,24 @@ class TestTokens:
 
     def test_rejects_invalid_tokens(self, email_manager: EmailManager, settings: Settings) -> None:
         """
-        A garbage token and a token without a string subject are rejected.
+        A garbage token, a token without a string subject and a reset token without a version are rejected.
 
         :param email_manager: The test email manager.
         :param settings: The test settings.
         :return: None
         """
-        no_subject: str = jwt.encode(
-            payload={"exp": datetime.now(tz=UTC) + timedelta(minutes=1), "purpose": "password_reset"},
-            key=settings.security.secret_key.get_secret_value(),
-            algorithm=SecurityManager.ALGORITHM,
+        claims: dict[str, object] = {"exp": datetime.now(tz=UTC) + timedelta(minutes=1), "purpose": "password_reset"}
+        no_subject, no_version = (
+            jwt.encode(
+                payload=payload,
+                key=settings.security.secret_key.get_secret_value(),
+                algorithm=SecurityManager.ALGORITHM,
+            )
+            for payload in (claims, {**claims, "sub": "a@example.com"})
         )
         assert email_manager.verify_password_reset_token(token="garbage") is None
         assert email_manager.verify_password_reset_token(token=no_subject) is None
+        assert email_manager.verify_password_reset_token(token=no_version) is None
 
 
 class TestLetters:
@@ -82,7 +87,7 @@ class TestLetters:
         :param outbox: The letters sent during the test.
         :return: None
         """
-        await email_manager.send_reset_password_email(email_to="a@example.com")
+        await email_manager.send_reset_password_email(email_to="a@example.com", version=0)
         assert outbox[0]["Subject"] == "Test Project - Password recovery for user a@example.com"
         assert outbox[0]["From"] == "Test Project <noreply@example.com>"
         assert [part.get_content_type() for part in outbox[0].walk() if not part.is_multipart()] == [
@@ -168,8 +173,10 @@ class TestDelivery:
         email_manager: EmailManager = EmailManager(settings=closed_port, security_manager=security_manager)
         await email_manager.send_test_email(email_to="a@example.com")
         assert len(log_messages) == 1
-        assert log_messages[0].startswith("Failed to send email to a@example.com: ")
+        assert log_messages[0].startswith("Failed to send an email: ")
         assert "\n" not in log_messages[0]
+        # The address of the recipient stays out of the log
+        assert "a@example.com" not in log_messages[0]
 
 
 def test_get_email_manager_is_a_singleton() -> None:

@@ -107,7 +107,23 @@ class TestCreateItem:
         )
         assert response.status_code == 201
         assert response.json()["owner_id"] == str(user.id)
+        assert response.json()["owner_email"] == user.email
         assert response.json()["title"] == "New"
+
+    async def test_rejects_the_nul_character(
+        self, client: AsyncClient, create_user: UserFactory, auth_headers: AuthHeaders
+    ) -> None:
+        """
+        A NUL character, which PostgreSQL cannot store, is a validation error, not a database error.
+
+        :param client: The HTTP client of the application.
+        :param create_user: The user factory.
+        :param auth_headers: Builds the Authorization header of a user.
+        :return: None
+        """
+        user: User = await create_user()
+        response: Response = await client.post(url="/items/", json={"title": "a\x00b"}, headers=auth_headers(user))
+        assert response.status_code == 422
 
     async def test_anonymous_user(self, client: AsyncClient) -> None:
         """
@@ -143,6 +159,11 @@ class TestItemById:
         updated: Response = await client.put(url=f"/items/{item.id}", json={"title": "New"}, headers=headers)
         assert updated.json()["title"] == "New"
         assert updated.json()["description"] == "Kept"
+        # A title can be left out, but not cleared; a description can be cleared
+        no_title: Response = await client.put(url=f"/items/{item.id}", json={"title": None}, headers=headers)
+        assert no_title.status_code == 422
+        cleared: Response = await client.put(url=f"/items/{item.id}", json={"description": None}, headers=headers)
+        assert cleared.json()["description"] is None
         deleted: Response = await client.delete(url=f"/items/{item.id}", headers=headers)
         assert deleted.json() == {"message": "Item deleted successfully"}
         gone: Response = await client.get(url=f"/items/{item.id}", headers=headers)

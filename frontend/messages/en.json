@@ -5,7 +5,6 @@
   },
   "Common": {
     "errorTitle": "Something went wrong",
-    "errorGeneric": "The request failed. Please try again.",
     "email": "Email",
     "password": "Password",
     "confirmPassword": "Confirm password",
@@ -26,14 +25,37 @@
     "next": "Next",
     "language": "Language",
     "lightTheme": "Switch to the light theme",
-    "darkTheme": "Switch to the dark theme"
+    "darkTheme": "Switch to the dark theme",
+    "close": "Close"
   },
   "Validation": {
     "required": "This field is required",
     "email": "Enter a valid email address",
     "tooLong": "The text is too long",
-    "passwordLength": "The password must be 8 to 40 characters long",
-    "passwordsMismatch": "The passwords do not match"
+    "passwordLength": "The password must be 8 to 72 characters long",
+    "passwordsMismatch": "The passwords do not match",
+    "passwordTooLong": "The password is too long: at most 72 bytes (letters outside Latin take 2 or more)"
+  },
+  "Errors": {
+    "generic": "The request failed. Please try again.",
+    "network": "No connection to the server. Check your internet connection and try again.",
+    "server": "The server failed to handle the request. Please try again later.",
+    "unavailable": "The service is temporarily unavailable. Please try again later.",
+    "forbidden": "You do not have permission to do this.",
+    "notFound": "Not found. It may have been deleted already.",
+    "validation": "Some of the values were not accepted. Check the fields and try again.",
+    "tooManyRequests": "Too many requests. Wait a minute and try again.",
+    "tooManyLoginAttempts": "Too many failed login attempts. Try again in 15 minutes or reset the password.",
+    "incorrectCredentials": "Incorrect email or password",
+    "inactiveUser": "This account is deactivated. Contact the administrator.",
+    "incorrectPassword": "The current password is incorrect",
+    "samePassword": "The new password must differ from the current one",
+    "commonPassword": "This password is too common. Choose another one.",
+    "emailTaken": "This email is already used by another account",
+    "invalidResetToken": "The link is invalid, expired or already used. Request a new one.",
+    "invalidVerificationToken": "The link is invalid or expired. Request a new one.",
+    "superuserSelfDelete": "Superusers cannot delete their own account",
+    "superuserSelfLock": "Superusers cannot deactivate or demote themselves"
   },
   "Nav": {
     "login": "Log in",
@@ -89,7 +111,7 @@
     "login": "Log in",
     "submit": "Create account",
     "successTitle": "Check your email",
-    "successDescription": "We have sent a confirmation link to {email}. You can log in already.",
+    "successDescription": "If {email} is not registered yet, we have created the account and sent a confirmation link to it. Already have an account? Log in or recover the password.",
     "toLogin": "Go to login"
   },
   "RecoverPassword": {
@@ -144,7 +166,8 @@
     "emptyDescription": "Add an item to get started.",
     "created": "Item created",
     "updated": "Item saved",
-    "deleted": "Item deleted"
+    "deleted": "Item deleted",
+    "owner": "Owner"
   },
   "Admin": {
     "title": "Users",
@@ -180,7 +203,7 @@
     "emailHint": "You log in with this email.",
     "currentPassword": "Current password",
     "changePassword": "Change password",
-    "passwordChanged": "Password changed",
+    "passwordChanged": "Password changed. Log in with the new password.",
     "theme": "Theme",
     "theme_system": "As in the system",
     "theme_light": "Light",
@@ -189,6 +212,7 @@
     "deleteAccountTitle": "Delete your account?",
     "deleteAccountDescription": "Your account and all your items will be deleted permanently.",
     "deleteAccountConfirm": "This cannot be undone. All your data will be lost.",
-    "accountDeleted": "Your account has been deleted"
+    "accountDeleted": "Your account has been deleted",
+    "currentPasswordHint": "Needed to change the email."
   }
 }

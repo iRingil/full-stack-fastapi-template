@@ -21,6 +21,8 @@ export type FormTextFieldProps<T extends FieldValues> = {
   isDisabled?: boolean
   /** Renders a multi-line text area instead of an input. */
   multiline?: boolean
+  /** Focus the field when it appears (the first field of a dialog). */
+  autoFocus?: boolean
 }
 
 /**
@@ -39,6 +41,7 @@ export function FormTextField<T extends FieldValues>({
   isRequired,
   isDisabled,
   multiline,
+  autoFocus,
 }: FormTextFieldProps<T>): ReactNode {
   const { field, fieldState } = useController({ control, name })
   const variant = useFieldVariant()
@@ -53,6 +56,7 @@ export function FormTextField<T extends FieldValues>({
       isInvalid={fieldState.invalid}
       isRequired={isRequired}
       isDisabled={isDisabled ?? field.disabled}
+      autoFocus={autoFocus}
       validationBehavior="aria"
     >
       <Label>{label}</Label>

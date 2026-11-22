@@ -21,7 +21,7 @@ import {
 import { FormAlert } from "@/components/ui/FormAlert"
 import { FormTextField } from "@/components/ui/FormTextField"
 import { LinkButton } from "@/components/ui/LinkButton"
-import { errorMessage } from "@/lib/api-error"
+import { useErrorMessage } from "@/hooks/useErrorMessage"
 import { emailSchema } from "@/lib/validation"
 import { AuthCard } from "./AuthCard"
 
@@ -34,6 +34,7 @@ export function ResendVerificationForm(): ReactNode {
   const tc = useTranslations("Common")
   const tv = useTranslations("Validation")
   const resend = useMutation(resendVerificationEmailMutation())
+  const errorMessage = useErrorMessage()
   const {
     control,
     handleSubmit,
@@ -49,7 +50,7 @@ export function ResendVerificationForm(): ReactNode {
     try {
       await resend.mutateAsync({ body: { email } })
     } catch (error) {
-      setError("root", { message: errorMessage(error, tc("errorGeneric")) })
+      setError("root", { message: errorMessage(error) })
     }
   })
 
@@ -70,9 +71,9 @@ export function ResendVerificationForm(): ReactNode {
  */
 export function VerifyEmail(): ReactNode {
   const t = useTranslations("VerifyEmail")
-  const tc = useTranslations("Common")
   const queryClient: QueryClient = useQueryClient()
   const token: string | null = useSearchParams().get("token")
+  const errorMessage = useErrorMessage()
   const verify = useMutation({
     ...verifyEmailMutation(),
     // A logged-in user's cached profile still says "not verified"
@@ -107,10 +108,7 @@ export function VerifyEmail(): ReactNode {
     )
   }
   return (
-    <AuthCard
-      title={t("failedTitle")}
-      description={token ? errorMessage(verify.error, tc("errorGeneric")) : t("missingToken")}
-    >
+    <AuthCard title={t("failedTitle")} description={token ? errorMessage(verify.error) : t("missingToken")}>
       <ResendVerificationForm />
     </AuthCard>
   )

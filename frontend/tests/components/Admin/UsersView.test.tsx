@@ -49,6 +49,7 @@ describe("UsersView", () => {
     renderWithProviders(<UsersView />)
 
     expect(await screen.findByText("No access")).toBeInTheDocument()
+    expect(screen.getByRole("heading", { level: 1, name: "Users" })).toBeInTheDocument()
     const paths = fetch.mock.calls.map((call) => new URL((call[0] as Request).url).pathname)
     expect(paths).not.toContain("/api/v1/users/")
   })
@@ -118,7 +119,13 @@ describe("UsersView", () => {
         : jsonResponse({ detail: "Database is down" }, 503),
     )
     renderWithProviders(<UsersView />)
-    expect(await screen.findByText("Database is down", {}, { timeout: 5000 })).toBeInTheDocument()
+    expect(
+      await screen.findByText(
+        "The server failed to handle the request. Please try again later.",
+        {},
+        { timeout: 5000 },
+      ),
+    ).toBeInTheDocument()
   })
 
   it("dims the previous page while the next one loads", async () => {

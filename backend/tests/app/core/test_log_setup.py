@@ -24,7 +24,7 @@ from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 # noinspection PyProtectedMember
-from app.api.deps import _decode_user_id_from_token
+from app.api.deps import _decode_access_token
 from app.core.config import Settings
 
 # noinspection PyProtectedMember
@@ -251,10 +251,10 @@ class TestDescribeException:
         :return: None
         """
         with pytest.raises(HTTPException) as exc_info:
-            _decode_user_id_from_token(token="garbage", settings=settings, security_manager=security_manager)
+            _decode_access_token(token="garbage", settings=settings, security_manager=security_manager)
         description: str = describe_exception(exc=exc_info.value)
         assert description.startswith("HTTPException: 401: Could not validate credentials (app.api.deps:")
-        assert ":_decode_user_id_from_token:" in description
+        assert ":_decode_access_token:" in description
 
     def test_outside_the_project(self) -> None:
         """

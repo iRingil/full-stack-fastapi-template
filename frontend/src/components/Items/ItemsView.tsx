@@ -13,9 +13,10 @@ import { readItemsOptions } from "@/client/@tanstack/react-query.gen"
 import type { ItemPublic } from "@/client/types.gen"
 import { FormAlert } from "@/components/ui/FormAlert"
 import { TablePagination } from "@/components/ui/TablePagination"
+import { useCurrentUser } from "@/hooks/useAuth"
+import { useErrorMessage } from "@/hooks/useErrorMessage"
 import { useItemMutations } from "@/hooks/useItemMutations"
 import { usePageParam } from "@/hooks/usePageParam"
-import { errorMessage } from "@/lib/api-error"
 import { ItemActionsMenu } from "./ItemActionsMenu"
 import { ItemFormDialog } from "./ItemFormDialog"
 
@@ -31,6 +32,10 @@ export function ItemsView(): ReactNode {
   const [page, setPage] = usePageParam()
   const [isAddOpen, setAddOpen] = useState<boolean>(false)
   const { create } = useItemMutations()
+  const errorMessage = useErrorMessage()
+  // A superuser sees the items of all the users, so the table says whose each one is
+  const { data: currentUser } = useCurrentUser()
+  const showOwner: boolean = currentUser?.is_superuser === true
   const { data, error, isPending, isPlaceholderData } = useQuery({
     ...readItemsOptions({ query: { skip: (page - 1) * ITEMS_PAGE_SIZE, limit: ITEMS_PAGE_SIZE } }),
     placeholderData: keepPreviousData,
@@ -54,7 +59,7 @@ export function ItemsView(): ReactNode {
         </Button>
       </div>
 
-      {error ? <FormAlert>{errorMessage(error, tc("errorGeneric"))}</FormAlert> : null}
+      {error ? <FormAlert>{errorMessage(error)}</FormAlert> : null}
 
       <Table>
         <Table.ScrollContainer>
@@ -66,6 +71,7 @@ export function ItemsView(): ReactNode {
             <Table.Header>
               <Table.Column isRowHeader>{t("itemTitle")}</Table.Column>
               <Table.Column>{t("itemDescription")}</Table.Column>
+              {showOwner ? <Table.Column>{t("owner")}</Table.Column> : null}
               <Table.Column className="w-16 text-end">
                 <span className="sr-only">{tc("actions")}</span>
               </Table.Column>
@@ -90,8 +96,18 @@ export function ItemsView(): ReactNode {
             >
               {(item: ItemPublic): ReactNode => (
                 <Table.Row id={item.id}>
-                  <Table.Cell className="max-w-xs truncate font-medium">{item.title}</Table.Cell>
-                  <Table.Cell className="max-w-md truncate text-muted">{item.description || "—"}</Table.Cell>
+                  {/* The full text of a truncated cell is in its tooltip */}
+                  <Table.Cell className="max-w-xs truncate font-medium">
+                    <span title={item.title}>{item.title}</span>
+                  </Table.Cell>
+                  <Table.Cell className="max-w-md truncate text-muted">
+                    <span title={item.description ?? undefined}>{item.description || "—"}</span>
+                  </Table.Cell>
+                  {showOwner ? (
+                    <Table.Cell className="max-w-xs truncate">
+                      <span title={item.owner_email}>{item.owner_email}</span>
+                    </Table.Cell>
+                  ) : null}
                   <Table.Cell className="text-end">
                     <ItemActionsMenu item={item} />
                   </Table.Cell>

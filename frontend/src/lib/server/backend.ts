@@ -6,10 +6,22 @@
 
 import type { NextRequest } from "next/server"
 
-/** Name of the httpOnly cookie that holds the backend's access token. */
-export const AUTH_COOKIE = "access_token"
+/** Whether this is a production build: the auth cookie is then `Secure` and bound to this host. */
+export const IS_PRODUCTION: boolean = process.env.NODE_ENV === "production"
 
-/** Request headers passed through to the backend; the client IP is needed by its rate limiter. */
+/**
+ * Name of the httpOnly cookie that holds the backend's access token.
+ * In production it has the `__Host-` prefix: the browser then accepts it only with `Secure`, `Path=/` and no
+ * `Domain`, so neither a subdomain nor a plain-HTTP page can set or overwrite it. Development runs over plain HTTP,
+ * where browsers reject the prefix.
+ */
+export const AUTH_COOKIE: string = IS_PRODUCTION ? "__Host-access_token" : "access_token"
+
+/**
+ * Request headers passed through to the backend; the client IP is needed by its rate limiters.
+ * `X-Forwarded-For` is trusted as it arrives: the reverse proxy in front of this server must overwrite it with the
+ * real peer address (`infrastructure/nginx`), and this server must not be reachable past the proxy.
+ */
 const FORWARDED_REQUEST_HEADERS: readonly string[] = [
   "accept",
   "accept-language",

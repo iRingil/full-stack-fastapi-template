@@ -40,6 +40,6 @@ describe("DashboardView", () => {
     renderWithProviders(<DashboardView />)
 
     await userEvent.click(await screen.findByRole("button", { name: "Send again" }))
-    expect(await screen.findByText("Too many requests")).toBeInTheDocument()
+    expect(await screen.findByText("Too many requests. Wait a minute and try again.")).toBeInTheDocument()
   })
 })

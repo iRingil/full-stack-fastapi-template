@@ -1,5 +1,7 @@
 /**
  * @file Settings tab "My profile": the user's name and email.
+ * @description Changing the email asks for the current password (the backend requires it): the address is what
+ * the password is recovered through.
  */
 
 "use client"
@@ -11,10 +13,11 @@ import { useTranslations } from "next-intl"
 import { type ReactNode, useEffect } from "react"
 import { useForm } from "react-hook-form"
 import { readUserMeQueryKey, updateUserMeMutation } from "@/client/@tanstack/react-query.gen"
+import { FormPasswordField } from "@/components/ui/FormPasswordField"
 import { FormTextField } from "@/components/ui/FormTextField"
 import { useCurrentUser } from "@/hooks/useAuth"
 import { useNotify } from "@/hooks/useNotify"
-import { emptyToNull, profileSchema } from "@/lib/validation"
+import { emptyToNull, isSameEmail, profileSchema } from "@/lib/validation"
 
 /**
  * Renders the profile form.
@@ -39,18 +42,29 @@ export function UserInformation(): ReactNode {
     control,
     handleSubmit,
     reset,
+    watch,
     formState: { isDirty, isSubmitting },
-  } = useForm({ resolver: zodResolver(profileSchema(tv)), defaultValues: { fullName: "", email: "" } })
+  } = useForm({
+    resolver: zodResolver(profileSchema(tv, user?.email ?? "")),
+    defaultValues: { fullName: "", email: "", currentPassword: "" },
+  })
+  const isEmailChanged: boolean = isSameEmail(watch("email"), user?.email ?? "") === false
 
   useEffect((): void => {
     if (user) {
-      reset({ fullName: user.full_name ?? "", email: user.email })
+      reset({ fullName: user.full_name ?? "", email: user.email, currentPassword: "" })
     }
   }, [user, reset])
 
   const onSubmit = handleSubmit(async (values): Promise<void> => {
     try {
-      await updateMe.mutateAsync({ body: { full_name: emptyToNull(values.fullName), email: values.email } })
+      await updateMe.mutateAsync({
+        body: {
+          full_name: emptyToNull(values.fullName),
+          email: values.email,
+          current_password: isEmailChanged ? values.currentPassword : undefined,
+        },
+      })
     } catch {
       // Shown by the toast; the form keeps the entered values
     }
@@ -68,6 +82,16 @@ export function UserInformation(): ReactNode {
         isRequired
         description={t("emailHint")}
       />
+      {isEmailChanged ? (
+        <FormPasswordField
+          control={control}
+          name="currentPassword"
+          label={t("currentPassword")}
+          description={t("currentPasswordHint")}
+          autoComplete="current-password"
+          isRequired
+        />
+      ) : null}
       <Button type="submit" className="self-start" isPending={isSubmitting} isDisabled={!isDirty}>
         {tc("save")}
       </Button>

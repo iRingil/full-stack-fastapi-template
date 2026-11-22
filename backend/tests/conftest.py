@@ -42,7 +42,7 @@ from sqlmodel import SQLModel
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 import app.app_factory as app_factory  # noqa: PLR0402 - for basedpyright 'from app import' means the tests' own app package
-from app.api.deps import ResendVerificationRateLimiter, ResendVerificationRateLimiterProvider
+from app.api.deps import ALL_LIMITERS
 from app.app_factory import AppFactory
 from app.core.config import (
     AppSettings,
@@ -281,7 +281,9 @@ def auth_headers_fixture(security_manager: SecurityManager) -> AuthHeaders:
         :param user: The user to authenticate as.
         :return: The headers with a valid access token.
         """
-        token: str = security_manager.create_access_token(subject=str(user.id), expires_delta=timedelta(minutes=5))
+        token: str = security_manager.create_access_token(
+            subject=str(user.id), expires_delta=timedelta(minutes=5), version=user.token_version
+        )
         return {"Authorization": f"Bearer {token}"}
 
     return build
@@ -298,8 +300,8 @@ async def client_fixture(
     """
     An HTTP client of the real application over the test database.
 
-    The global logging setup is skipped (it is tested in tests/app/core/test_log_setup.py), and the rate limiter
-    of verification emails starts empty.
+    The global logging setup is skipped (it is tested in tests/app/core/test_log_setup.py), and the rate limiters
+    start empty.
 
     :param monkeypatch: pytest's monkeypatch fixture.
     :param settings: The test settings.
@@ -309,10 +311,8 @@ async def client_fixture(
     :return: The client.
     """
     monkeypatch.setattr(target=app_factory, name="LoggingManager", value=lambda **_: None)
-    limiter = ResendVerificationRateLimiter.dependency
-    assert isinstance(limiter, ResendVerificationRateLimiterProvider)
-    # noinspection PyProtectedMember
-    limiter._last_request_at.clear()
+    for limiter in ALL_LIMITERS:
+        limiter.clear()
     application = AppFactory(settings=settings, db_manager=db_manager).app
     application.dependency_overrides[get_settings] = lambda: settings
     application.dependency_overrides[get_db_manager] = lambda: db_manager

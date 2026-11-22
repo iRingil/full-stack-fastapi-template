@@ -108,6 +108,8 @@ class BaseCRUD[
         stmt = (
             select(self._model, count().over().label(name="total_count"))
             .where(*where)
+            # A stable order: without one the pages of OFFSET/LIMIT may repeat or skip rows
+            .order_by(*self._mapper.primary_key)
             .offset(offset=skip)
             .limit(limit=limit)
         )

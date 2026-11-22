@@ -97,7 +97,8 @@ class AppSettings(BaseSettings):
     model_config: ClassVar[SettingsConfigDict] = _config(prefix="")
 
     project_name: str
-    environment: Literal["local", "staging", "production"] = "local"
+    # Required: "local" turns on the API docs, the debug mode and the unauthenticated private router
+    environment: Literal["local", "staging", "production"]
     frontend_host: HttpUrl = HttpUrl("http://localhost:5173")
     # NoDecode: the raw string goes to _parse_cors, which also takes a comma-separated list, not only JSON
     backend_cors_origins: Annotated[list[AnyHttpUrl], NoDecode, BeforeValidator(_parse_cors)] = []
@@ -138,7 +139,7 @@ class SuperuserSettings(BaseSettings):
     model_config: ClassVar[SettingsConfigDict] = _config(prefix="FIRST_SUPERUSER_")
 
     email: EmailStr = Field(validation_alias="FIRST_SUPERUSER")
-    password: SecretStr = Field(min_length=8, max_length=40)  # the limits of a user password
+    password: SecretStr = Field(min_length=8, max_length=72)  # the limits of a user password
 
 
 class PostgresSettings(BaseSettings):

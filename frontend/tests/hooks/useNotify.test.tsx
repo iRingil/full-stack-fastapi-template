@@ -14,15 +14,15 @@ function Probe(): ReactNode {
 }
 
 describe("useNotify", () => {
-  it("shows successes and errors, with the backend's message or a generic one", async () => {
+  it("shows successes and errors, the errors translated", async () => {
     renderWithProviders(<Probe />)
 
     act(() => notify.success("Saved"))
-    act(() => notify.error(new ApiError(409, { detail: "Already exists" })))
+    act(() => notify.error(new ApiError(409, { detail: "User with this email already exists" })))
     act(() => notify.error(new Error("boom")))
 
     expect(await screen.findByText("Saved")).toBeInTheDocument()
-    expect(screen.getByText("Already exists")).toBeInTheDocument()
+    expect(screen.getByText("This email is already used by another account")).toBeInTheDocument()
     expect(screen.getByText("The request failed. Please try again.")).toBeInTheDocument()
   })
 

@@ -42,6 +42,8 @@ describe("ResetPasswordForm", () => {
 
     await submit()
 
-    expect(await screen.findByText("Invalid token")).toBeInTheDocument()
+    expect(
+      await screen.findByText("The link is invalid, expired or already used. Request a new one."),
+    ).toBeInTheDocument()
   })
 })

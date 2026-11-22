@@ -6,7 +6,7 @@ from uuid import UUID
 from fastapi import APIRouter, HTTPException, Path, status
 from fastapi_utils.cbv import cbv
 
-from app.api.deps import ItemCrudDep, OptionalCurrentUser
+from app.api.deps import ItemCrudDep, LimitQuery, OptionalCurrentUser, SkipQuery
 from app.models import Item, ItemCreate, ItemPublic, ItemsPublic, ItemUpdate, Message
 
 __all__: tuple[str, ...] = ("items_router",)
@@ -53,7 +53,7 @@ class ItemsRouter:
         summary="Read Items",
         description="Getting the list of items. Anonymous users get an empty list.",
     )
-    async def read_items(self, skip: int = 0, limit: int = 100) -> ItemsPublic:
+    async def read_items(self, skip: SkipQuery = 0, limit: LimitQuery = 100) -> ItemsPublic:
         """
         Endpoint for retrieving a list of items.
 

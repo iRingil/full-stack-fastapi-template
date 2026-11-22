@@ -2,7 +2,7 @@ import { screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { describe, expect, it } from "vitest"
 import { SignUpForm } from "@/components/Auth/SignUpForm"
-import { jsonResponse, mockApi, REGULAR_USER, renderWithProviders } from "../../testUtils"
+import { jsonResponse, mockApi, renderWithProviders } from "../../testUtils"
 
 /**
  * Fills and submits the sign-up form.
@@ -24,7 +24,7 @@ describe("SignUpForm", () => {
     mockApi({
       "POST /api/v1/users/signup": async (request) => {
         body = await request.json()
-        return jsonResponse(REGULAR_USER, 201)
+        return jsonResponse({ message: "ok" })
       },
     })
     renderWithProviders(<SignUpForm />)
@@ -32,7 +32,10 @@ describe("SignUpForm", () => {
     await signUp()
 
     expect(await screen.findByRole("heading", { name: "Check your email" })).toBeInTheDocument()
-    expect(screen.getByText(/We have sent a confirmation link to user@example.com/)).toBeInTheDocument()
+    // The same message for a new and for a taken email: the answer does not reveal registered addresses
+    expect(
+      screen.getByText(/If user@example.com is not registered yet, we have created the account/),
+    ).toBeInTheDocument()
     expect(screen.getByRole("link", { name: "Go to login" })).toHaveAttribute("href", "/login")
     expect(body).toEqual({ email: "user@example.com", password: "secret123", full_name: null })
   })
@@ -42,7 +45,7 @@ describe("SignUpForm", () => {
     mockApi({
       "POST /api/v1/users/signup": async (request) => {
         body = await request.json()
-        return jsonResponse(REGULAR_USER, 201)
+        return jsonResponse({ message: "ok" })
       },
     })
     renderWithProviders(<SignUpForm />)
@@ -54,11 +57,12 @@ describe("SignUpForm", () => {
   })
 
   it("shows the backend's error", async () => {
-    mockApi({ "POST /api/v1/users/signup": () => jsonResponse({ detail: "The user already exists" }, 400) })
+    const detail = [{ loc: ["body", "password"], msg: "Value error, This password is too common" }]
+    mockApi({ "POST /api/v1/users/signup": () => jsonResponse({ detail }, 422) })
     renderWithProviders(<SignUpForm />)
 
     await signUp()
 
-    expect(await screen.findByText("The user already exists")).toBeInTheDocument()
+    expect(await screen.findByText("This password is too common. Choose another one.")).toBeInTheDocument()
   })
 })

@@ -41,8 +41,8 @@ describe("VerifyEmail", () => {
     })
     renderWithProviders(<VerifyEmail />)
 
-    expect(await screen.findByText("Invalid or expired verification token")).toBeInTheDocument()
+    expect(await screen.findByText("The link is invalid or expired. Request a new one.")).toBeInTheDocument()
     await resend()
-    await waitFor(() => expect(screen.getByText("Too many requests")).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText("Too many requests. Wait a minute and try again.")).toBeInTheDocument())
   })
 })

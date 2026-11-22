@@ -35,7 +35,7 @@ describe("DeleteAccount", () => {
 
     await confirmDeletion()
 
-    expect(await screen.findByText("Super users are not allowed to delete themselves")).toBeInTheDocument()
+    expect(await screen.findByText("Superusers cannot delete their own account")).toBeInTheDocument()
     expect(router.replace).not.toHaveBeenCalled()
   })
 

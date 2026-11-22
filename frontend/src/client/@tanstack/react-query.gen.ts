@@ -11,6 +11,7 @@ import {
   deleteUserMe,
   healthCheck,
   loginAccessToken,
+  logout,
   type Options,
   readItem,
   readItems,
@@ -50,6 +51,8 @@ import type {
   LoginAccessTokenData,
   LoginAccessTokenError,
   LoginAccessTokenResponse,
+  LogoutData,
+  LogoutResponse,
   ReadItemData,
   ReadItemError,
   ReadItemResponse,
@@ -104,7 +107,7 @@ import type {
 /**
  * Login for Access Token
  *
- * OAuth2 compatible token login, get an access token for future requests.
+ * OAuth2 compatible token login, get an access token for future requests. Limited to 10 requests per minute per IP address and to 5 failed attempts per 15 minutes per account.
  */
 export const loginAccessTokenMutation = (
   options?: Partial<Options<LoginAccessTokenData>>,
@@ -116,6 +119,27 @@ export const loginAccessTokenMutation = (
   > = {
     mutationFn: async (fnOptions) => {
       const { data } = await loginAccessToken({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      })
+      return data
+    },
+  }
+  return mutationOptions
+}
+
+/**
+ * Logout
+ *
+ * Revoke the access tokens of the current user: a logout from all devices.
+ */
+export const logoutMutation = (
+  options?: Partial<Options<LogoutData>>,
+): UseMutationOptions<LogoutResponse, DefaultError, Options<LogoutData>> => {
+  const mutationOptions: UseMutationOptions<LogoutResponse, DefaultError, Options<LogoutData>> = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await logout({
         ...options,
         ...fnOptions,
         throwOnError: true,
@@ -150,7 +174,7 @@ export const testTokenMutation = (
 /**
  * Recover Password
  *
- * Send a password recovery email.
+ * Send a password recovery email. Limited to 3 requests per minute per IP address.
  */
 export const recoverPasswordMutation = (
   options?: Partial<Options<RecoverPasswordData>>,
@@ -444,7 +468,7 @@ export const updatePasswordMeMutation = (
 /**
  * Register New User
  *
- * New user registration.
+ * New user registration. Limited to 5 requests per minute per IP address.
  */
 export const registerUserMutation = (
   options?: Partial<Options<RegisterUserData>>,

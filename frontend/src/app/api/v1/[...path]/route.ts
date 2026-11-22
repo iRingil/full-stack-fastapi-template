@@ -25,13 +25,30 @@ const DROPPED_RESPONSE_HEADERS: ReadonlySet<string> = new Set([
 ])
 
 /**
+ * Checks a request path against the blocked ones the way the backend will read it.
+ * @description The backend decodes percent-escapes and redirects away extra slashes, so "/login/access%2Dtoken" and
+ * "/login/access-token//" reach the same route as the plain path.
+ * @param pathname - The path of the request URL, still percent-encoded.
+ * @returns True for a blocked path in any spelling, and for a path that cannot be decoded.
+ */
+function isBlockedPath(pathname: string): boolean {
+  let decoded: string
+  try {
+    decoded = decodeURIComponent(pathname)
+  } catch {
+    return true
+  }
+  return BLOCKED_PATHS.has(decoded.replace(/\/{2,}/g, "/").replace(/\/$/, ""))
+}
+
+/**
  * Forwards one request to the backend and streams the answer back.
  * @param request - The incoming request.
  * @returns The backend's response, 403 for a cross-site write, 404 for a blocked path, 502 if the backend is down.
  */
 async function proxy(request: NextRequest): Promise<Response> {
   const { pathname, search } = request.nextUrl
-  if (BLOCKED_PATHS.has(pathname.replace(/\/$/, ""))) {
+  if (isBlockedPath(pathname)) {
     return errorResponse(404, "Not Found")
   }
   const isSafe: boolean = SAFE_METHODS.has(request.method)

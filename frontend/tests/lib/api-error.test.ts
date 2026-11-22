@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { client } from "@/client/client.gen"
-import { ApiError, detailMessage, errorMessage, installApiErrors } from "@/lib/api-error"
+import { ApiError, detailMessage, errorKey, installApiErrors } from "@/lib/api-error"
 import { jsonResponse } from "../testUtils"
 
 describe("detailMessage", () => {
@@ -39,14 +39,37 @@ describe("ApiError", () => {
   })
 })
 
-describe("errorMessage", () => {
-  it("prefers the backend message", () => {
-    expect(errorMessage(new ApiError(409, { detail: "Exists" }), "fallback")).toBe("Exists")
+describe("errorKey", () => {
+  it.each([
+    ["Incorrect email or password", 400, "incorrectCredentials"],
+    ["Too many failed login attempts. Please try again later.", 429, "tooManyLoginAttempts"],
+    ["User with this email already exists", 409, "emailTaken"],
+    ["Invalid token", 400, "invalidResetToken"],
+  ])("knows the backend's message %j", (detail, status, key) => {
+    expect(errorKey(new ApiError(status, { detail }))).toBe(key)
   })
 
-  it("falls back for other errors", () => {
-    expect(errorMessage(new ApiError(500, "  "), "fallback")).toBe("fallback")
-    expect(errorMessage(new Error("boom"), "fallback")).toBe("fallback")
+  it("finds the common password among the messages of a 422", () => {
+    const body = { detail: [{ msg: "Value error, This password is too common" }] }
+    expect(errorKey(new ApiError(422, body))).toBe("commonPassword")
+  })
+
+  it.each([
+    [0, "network"],
+    [403, "forbidden"],
+    [404, "notFound"],
+    [422, "validation"],
+    [429, "tooManyRequests"],
+    [502, "unavailable"],
+    [500, "server"],
+    [400, "generic"],
+  ])("falls back to the status %i for an unknown message", (status, key) => {
+    expect(errorKey(new ApiError(status, { detail: "Something the frontend has never heard of" }))).toBe(key)
+  })
+
+  it("is generic for an error without a message and for other exceptions", () => {
+    expect(errorKey(new ApiError(400, "  "))).toBe("generic")
+    expect(errorKey(new Error("boom"))).toBe("generic")
   })
 })
 

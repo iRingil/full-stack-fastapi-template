@@ -53,14 +53,73 @@ export class ApiError extends Error {
   }
 }
 
+/** Keys of the "Errors" messages: what the user is told about a failed request, in their language. */
+export type ErrorKey =
+  | "generic"
+  | "network"
+  | "server"
+  | "unavailable"
+  | "forbidden"
+  | "notFound"
+  | "validation"
+  | "tooManyRequests"
+  | "tooManyLoginAttempts"
+  | "incorrectCredentials"
+  | "inactiveUser"
+  | "incorrectPassword"
+  | "samePassword"
+  | "commonPassword"
+  | "emailTaken"
+  | "invalidResetToken"
+  | "invalidVerificationToken"
+  | "superuserSelfDelete"
+  | "superuserSelfLock"
+
 /**
- * Picks the message to show for a failed request.
- * @param error - Anything thrown by a query or mutation.
- * @param fallback - The (translated) message for errors without a backend `detail`.
- * @returns The backend's `detail`, or the fallback.
+ * The backend's `detail` texts (English, `backend/src/app/api`) that have a message of their own.
+ * A text that is not listed falls back to the message of its HTTP status.
  */
-export function errorMessage(error: unknown, fallback: string): string {
-  return error instanceof ApiError && error.detail ? error.detail : fallback
+const DETAIL_KEYS: Readonly<Record<string, ErrorKey>> = {
+  "Incorrect email or password": "incorrectCredentials",
+  "Inactive user": "inactiveUser",
+  "Too many failed login attempts. Please try again later.": "tooManyLoginAttempts",
+  "Incorrect password": "incorrectPassword",
+  "New password cannot be the same as the current one": "samePassword",
+  "User with this email already exists": "emailTaken",
+  "The user with this email already exists in the system.": "emailTaken",
+  "Invalid token": "invalidResetToken",
+  "Invalid or expired verification token": "invalidVerificationToken",
+  "Super users are not allowed to delete themselves": "superuserSelfDelete",
+  "Super users are not allowed to deactivate or demote themselves": "superuserSelfLock",
+}
+
+const STATUS_KEYS: Readonly<Record<number, ErrorKey>> = {
+  0: "network",
+  403: "forbidden",
+  404: "notFound",
+  422: "validation",
+  429: "tooManyRequests",
+  502: "unavailable",
+}
+
+/**
+ * Picks the message for a failed request: the backend answers in English, the user reads their own language.
+ * @param error - Anything thrown by a query or mutation.
+ * @returns The key of the "Errors" message.
+ */
+export function errorKey(error: unknown): ErrorKey {
+  if (!(error instanceof ApiError)) {
+    return "generic"
+  }
+  const detail: string = error.detail ?? ""
+  if (detail in DETAIL_KEYS) {
+    return DETAIL_KEYS[detail] as ErrorKey
+  }
+  // A 422 joins the messages of all the fields; the password check is the one worth its own message
+  if (detail.includes("This password is too common")) {
+    return "commonPassword"
+  }
+  return STATUS_KEYS[error.status] ?? (error.status >= 500 ? "server" : "generic")
 }
 
 let installed = false

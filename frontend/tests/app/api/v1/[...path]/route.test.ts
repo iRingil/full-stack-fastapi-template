@@ -61,7 +61,16 @@ describe("API proxy", () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
-  it.each(["/api/v1/login/access-token", "/api/v1/login/access-token/"])("does not proxy %s", async (path) => {
+  // Every spelling the backend would route to the token endpoint, and a path that cannot be decoded
+  it.each([
+    "/api/v1/login/access-token",
+    "/api/v1/login/access-token/",
+    "/api/v1/login/access-token//",
+    "/api/v1/login//access-token",
+    "/api/v1/login/access%2Dtoken",
+    "/api/v1/login/access-token%2F",
+    "/api/v1/login/%E0%A4%A",
+  ])("does not proxy %s", async (path) => {
     const response = await POST(new NextRequest(`http://site${path}`, { method: "POST" }))
     expect(response.status).toBe(404)
     expect(fetchMock).not.toHaveBeenCalled()

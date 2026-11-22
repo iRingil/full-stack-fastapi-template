@@ -48,11 +48,19 @@ describe("password confirmation", () => {
     expect(errorsOf(resetPasswordSchema(t).safeParse(values))).toEqual({ confirmPassword: "passwordsMismatch" })
   })
 
-  it("checks the password length like the backend (8 to 40)", () => {
+  it("checks the password length like the backend (8 to 72)", () => {
     const short = { currentPassword: "x", newPassword: "1234567", confirmPassword: "1234567" }
-    const long = { currentPassword: "x", newPassword: "a".repeat(41), confirmPassword: "a".repeat(41) }
+    const long = { currentPassword: "x", newPassword: "a".repeat(73), confirmPassword: "a".repeat(73) }
+    const longest = { currentPassword: "x", newPassword: "a".repeat(72), confirmPassword: "a".repeat(72) }
     expect(errorsOf(changePasswordSchema(t).safeParse(short))).toEqual({ newPassword: "passwordLength" })
-    expect(errorsOf(changePasswordSchema(t).safeParse(long))).toEqual({ newPassword: "passwordLength" })
+    expect(errorsOf(changePasswordSchema(t).safeParse(long))).toMatchObject({ newPassword: "passwordTooLong" })
+    expect(changePasswordSchema(t).safeParse(longest).success).toBe(true)
+  })
+
+  it("counts the bytes of the password: bcrypt takes 72 of them", () => {
+    const cyrillic = "й".repeat(37)
+    const values = { currentPassword: "x", newPassword: cyrillic, confirmPassword: cyrillic }
+    expect(errorsOf(changePasswordSchema(t).safeParse(values))).toEqual({ newPassword: "passwordTooLong" })
   })
 })
 
@@ -64,9 +72,16 @@ describe("other schemas", () => {
   })
 
   it("limits the profile name", () => {
-    expect(errorsOf(profileSchema(t).safeParse({ fullName: "a".repeat(256), email: "a@example.com" }))).toEqual({
-      fullName: "tooLong",
-    })
+    const values = { fullName: "a".repeat(256), email: "a@example.com", currentPassword: "" }
+    expect(errorsOf(profileSchema(t, "a@example.com").safeParse(values))).toEqual({ fullName: "tooLong" })
+  })
+
+  it("requires the current password for another email only", () => {
+    const schema = profileSchema(t, "a@example.com")
+    const changed = { fullName: "", email: "b@example.com", currentPassword: "" }
+    expect(errorsOf(schema.safeParse(changed))).toEqual({ currentPassword: "required" })
+    expect(schema.safeParse({ ...changed, currentPassword: "secret" }).success).toBe(true)
+    expect(schema.safeParse({ ...changed, email: " A@Example.com " }).success).toBe(true)
   })
 
   it("requires an item title", () => {

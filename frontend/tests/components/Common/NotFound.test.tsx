@@ -8,5 +8,6 @@ describe("NotFound", () => {
     renderWithProviders(<NotFound />)
     expect(screen.getByRole("heading", { name: "Page not found" })).toBeInTheDocument()
     expect(screen.getByRole("link", { name: "Go to the home page" })).toHaveAttribute("href", "/")
+    expect(document.title).toBe("Page not found | Full Stack FastAPI")
   })
 })

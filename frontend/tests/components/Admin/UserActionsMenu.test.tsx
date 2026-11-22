@@ -105,7 +105,7 @@ describe("UserActionsMenu", () => {
       }),
     )
 
-    expect(await screen.findByText("User not found")).toBeInTheDocument()
+    expect(await screen.findByText("Not found. It may have been deleted already.")).toBeInTheDocument()
     await waitFor(() => expect(screen.getByRole("alertdialog", { name: "Delete the user?" })).toBeInTheDocument())
   })
 })

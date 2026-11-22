@@ -73,3 +73,22 @@ describe("login route", () => {
     expect((await POST(loginRequest())).status).toBe(502)
   })
 })
+
+describe("login route in production", () => {
+  it("sets a Secure cookie with the __Host- prefix", async () => {
+    vi.stubEnv("NODE_ENV", "production")
+    vi.resetModules()
+    const route = await import("@/app/api/auth/login/route")
+    fetchMock.mockResolvedValue(Response.json({ access_token: fakeJwt({ exp: 1 }), token_type: "bearer" }))
+
+    const response = await route.POST(loginRequest())
+
+    const cookie = response.headers.get("set-cookie") ?? ""
+    expect(cookie).toContain("__Host-access_token=")
+    expect(cookie).toContain("Secure")
+    expect(cookie).toContain("Path=/")
+    expect(cookie).not.toContain("Domain")
+    vi.unstubAllEnvs()
+    vi.resetModules()
+  })
+})

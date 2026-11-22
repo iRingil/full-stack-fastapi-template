@@ -6,7 +6,15 @@
 
 import { type NextRequest, NextResponse } from "next/server"
 import type { Token } from "@/client"
-import { AUTH_COOKIE, backendHeaders, backendUrl, errorResponse, isSameOrigin, tokenMaxAge } from "@/lib/server/backend"
+import {
+  AUTH_COOKIE,
+  backendHeaders,
+  backendUrl,
+  errorResponse,
+  IS_PRODUCTION,
+  isSameOrigin,
+  tokenMaxAge,
+} from "@/lib/server/backend"
 
 /**
  * Logs the user in.
@@ -44,7 +52,7 @@ export async function POST(request: NextRequest): Promise<Response> {
   const result: NextResponse = new NextResponse(null, { status: 204 })
   result.cookies.set(AUTH_COOKIE, token, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
+    secure: IS_PRODUCTION,
     sameSite: "lax",
     path: "/",
     maxAge: tokenMaxAge(token),

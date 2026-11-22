@@ -79,3 +79,17 @@ describe("errorResponse", () => {
     expect(await response.json()).toEqual({ detail: "down" })
   })
 })
+
+describe("the auth cookie", () => {
+  it("is a plain cookie in development, where the site runs over HTTP", () => {
+    expect(AUTH_COOKIE).toBe("access_token")
+  })
+
+  it("is bound to the host in production", async () => {
+    vi.stubEnv("NODE_ENV", "production")
+    vi.resetModules()
+    const production = await import("@/lib/server/backend")
+    expect(production.IS_PRODUCTION).toBe(true)
+    expect(production.AUTH_COOKIE).toBe("__Host-access_token")
+  })
+})

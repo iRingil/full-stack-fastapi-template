@@ -1,5 +1,7 @@
 /**
  * @file Settings tab "Password": changes the password, the current one is required.
+ * @description A new password ends every session of the user (the backend revokes the tokens), this one included:
+ * after the change the user is sent to the login page.
  */
 
 "use client"
@@ -13,8 +15,9 @@ import { useForm } from "react-hook-form"
 import { updatePasswordMeMutation } from "@/client/@tanstack/react-query.gen"
 import { FormAlert } from "@/components/ui/FormAlert"
 import { FormPasswordField } from "@/components/ui/FormPasswordField"
+import { useAuth } from "@/hooks/useAuth"
+import { useErrorMessage } from "@/hooks/useErrorMessage"
 import { useNotify } from "@/hooks/useNotify"
-import { errorMessage } from "@/lib/api-error"
 import { changePasswordSchema } from "@/lib/validation"
 
 const EMPTY = { currentPassword: "", newPassword: "", confirmPassword: "" }
@@ -28,6 +31,8 @@ export function ChangePassword(): ReactNode {
   const tc = useTranslations("Common")
   const tv = useTranslations("Validation")
   const notify = useNotify()
+  const { logout } = useAuth()
+  const errorMessage = useErrorMessage()
   const updatePassword = useMutation(updatePasswordMeMutation())
   const {
     control,
@@ -44,9 +49,10 @@ export function ChangePassword(): ReactNode {
       })
       reset(EMPTY)
       notify.success(t("passwordChanged"))
+      await logout()
     } catch (error) {
       // "Incorrect password" and the like belong next to the form, not in a toast
-      setError("root", { message: errorMessage(error, tc("errorGeneric")) })
+      setError("root", { message: errorMessage(error) })
     }
   })
 

@@ -1,5 +1,7 @@
 /**
  * @file The sign-up form; the backend then emails a link that confirms the address.
+ * @description The backend answers the same for a new and for an already registered email (it must not reveal
+ * registered addresses), so the message after the form covers both cases.
  */
 
 "use client"
@@ -15,8 +17,8 @@ import { FormAlert } from "@/components/ui/FormAlert"
 import { FormPasswordField } from "@/components/ui/FormPasswordField"
 import { FormTextField } from "@/components/ui/FormTextField"
 import { LinkButton } from "@/components/ui/LinkButton"
+import { useErrorMessage } from "@/hooks/useErrorMessage"
 import { Link } from "@/i18n/navigation"
-import { errorMessage } from "@/lib/api-error"
 import { emptyToNull, signUpSchema } from "@/lib/validation"
 import { AuthCard } from "./AuthCard"
 
@@ -29,6 +31,7 @@ export function SignUpForm(): ReactNode {
   const tc = useTranslations("Common")
   const tv = useTranslations("Validation")
   const signUp = useMutation(registerUserMutation())
+  const errorMessage = useErrorMessage()
   const {
     control,
     handleSubmit,
@@ -45,13 +48,13 @@ export function SignUpForm(): ReactNode {
         body: { email: values.email, password: values.password, full_name: emptyToNull(values.fullName) },
       })
     } catch (error) {
-      setError("root", { message: errorMessage(error, tc("errorGeneric")) })
+      setError("root", { message: errorMessage(error) })
     }
   })
 
   if (signUp.isSuccess) {
     return (
-      <AuthCard title={t("successTitle")} description={t("successDescription", { email: signUp.data.email })}>
+      <AuthCard title={t("successTitle")} description={t("successDescription", { email: signUp.variables.body.email })}>
         <LinkButton href="/login" fullWidth>
           {t("toLogin")}
         </LinkButton>

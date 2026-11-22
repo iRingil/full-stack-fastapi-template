@@ -70,7 +70,7 @@ export function ItemFormDialog({
         }
       })}
     >
-      <FormTextField control={control} name="title" label={t("itemTitle")} isRequired />
+      <FormTextField control={control} name="title" label={t("itemTitle")} isRequired autoFocus />
       <FormTextField control={control} name="description" label={t("itemDescription")} multiline />
     </FormDialog>
   )

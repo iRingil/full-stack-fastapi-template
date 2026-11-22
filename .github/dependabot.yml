@@ -24,3 +24,10 @@ updates:
     ignore:
       - dependency-name: "*"
         update-types: ["version-update:semver-minor", "version-update:semver-patch"]
+  # GitHub Actions: pinned by commit SHA in the workflows, Dependabot moves the SHA and the version comment
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: "chore(ci)"

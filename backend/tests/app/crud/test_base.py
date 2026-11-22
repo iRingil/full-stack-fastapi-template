@@ -195,6 +195,19 @@ class TestRead:
         assert len(page.data) == 1
         assert page.count == 3
 
+    async def test_pages_follow_the_primary_key_order(self, tag_crud: TagCRUD) -> None:
+        """
+        The rows are ordered by the primary key, so the pages neither repeat nor skip rows.
+
+        :param tag_crud: The CRUD.
+        :return: None
+        """
+        await tag_crud.create_multi(objs_in=_tags("d", "b", "e", "a", "c"))
+        names: list[str] = [
+            tag.name for skip in (0, 2, 4) for tag in (await tag_crud.get_multi(skip=skip, limit=2)).data
+        ]
+        assert names == ["a", "b", "c", "d", "e"]
+
     async def test_page_past_the_end_keeps_the_total(self, tag_crud: TagCRUD) -> None:
         """
         A page past the end is empty but still reports the total.

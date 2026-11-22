@@ -7,7 +7,7 @@
 
 "use client"
 
-import { RouterProvider, Toast } from "@heroui/react"
+import { I18nProvider, RouterProvider, Toast } from "@heroui/react"
 import { type QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools"
 import { useLocale } from "next-intl"
@@ -54,16 +54,19 @@ export function Providers({ children }: { children: ReactNode }): ReactNode {
 
   return (
     <ThemeProvider attribute={["class", "data-theme"]} defaultTheme="system" enableSystem disableTransitionOnChange>
-      <RouterProvider
-        navigate={(href: string): void => router.push(href)}
-        useHref={(href: string): string => (href.startsWith("/") ? getPathname({ href, locale }) : href)}
-      >
-        <QueryClientProvider client={queryClient}>
-          {children}
-          <Toast.Provider placement="bottom end" />
-          <ReactQueryDevtools buttonPosition="bottom-left" />
-        </QueryClientProvider>
-      </RouterProvider>
+      {/* The built-in texts of the components (React Aria) follow the site's language, not the browser's */}
+      <I18nProvider locale={locale}>
+        <RouterProvider
+          navigate={(href: string): void => router.push(href)}
+          useHref={(href: string): string => (href.startsWith("/") ? getPathname({ href, locale }) : href)}
+        >
+          <QueryClientProvider client={queryClient}>
+            {children}
+            <Toast.Provider placement="bottom end" />
+            <ReactQueryDevtools buttonPosition="bottom-left" />
+          </QueryClientProvider>
+        </RouterProvider>
+      </I18nProvider>
     </ThemeProvider>
   )
 }

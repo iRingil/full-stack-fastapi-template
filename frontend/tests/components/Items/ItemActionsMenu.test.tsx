@@ -5,7 +5,13 @@ import type { ItemPublic } from "@/client/types.gen"
 import { ItemActionsMenu } from "@/components/Items/ItemActionsMenu"
 import { jsonResponse, mockApi, renderWithProviders } from "../../testUtils"
 
-const ITEM: ItemPublic = { id: "i1", owner_id: "u1", title: "First", description: "About it" }
+const ITEM: ItemPublic = {
+  id: "i1",
+  owner_id: "u1",
+  owner_email: "user@example.com",
+  title: "First",
+  description: "About it",
+}
 
 /**
  * Opens the row menu and picks an action.
@@ -49,7 +55,7 @@ describe("ItemActionsMenu", () => {
     await choose("Edit")
     await userEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Save" }))
 
-    expect(await screen.findByText("Item not found")).toBeInTheDocument()
+    expect(await screen.findByText("Not found. It may have been deleted already.")).toBeInTheDocument()
     expect(screen.getByRole("dialog")).toBeInTheDocument()
   })
 
@@ -73,7 +79,7 @@ describe("ItemActionsMenu", () => {
     await choose("Delete")
     const dialog = await screen.findByRole("alertdialog", { name: "Delete the item?" })
     await userEvent.click(within(dialog).getByRole("button", { name: "Delete" }))
-    expect(await screen.findByText("Not enough permissions")).toBeInTheDocument()
+    expect(await screen.findByText("You do not have permission to do this.")).toBeInTheDocument()
 
     await userEvent.click(
       within(screen.getByRole("alertdialog", { name: "Delete the item?" })).getByRole("button", { name: "Cancel" }),

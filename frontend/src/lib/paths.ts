@@ -25,11 +25,20 @@ export function matchesPath(path: string, pages: readonly string[]): boolean {
 /**
  * Validates the `from` parameter of the login page, so that it cannot redirect to another site.
  * @param from - The raw parameter value.
+ * @description The value is resolved the way the browser will resolve it: the URL parser drops tabs and line breaks
+ * and reads "\" as "/", so "/\t/evil.com" is "//evil.com", another site, although it does not start with "//".
  * @returns The path when it is local ("/items?page=2"), otherwise the dashboard.
  */
 export function safeRedirectPath(from: string | null | undefined): string {
-  if (!from?.startsWith("/") || from.startsWith("//") || from.startsWith("/\\")) {
+  if (!from?.startsWith("/")) {
     return DASHBOARD_PATH
   }
-  return from
+  const site = "http://site.invalid"
+  let url: URL
+  try {
+    url = new URL(from, site)
+  } catch {
+    return DASHBOARD_PATH
+  }
+  return url.origin === site ? `${url.pathname}${url.search}${url.hash}` : DASHBOARD_PATH
 }

@@ -6,10 +6,12 @@
 import { z } from "zod"
 
 /** Field limits of `backend/src/app/models.py`. */
-export const LIMITS = { email: 255, fullName: 255, passwordMin: 8, passwordMax: 40, title: 255, description: 255 }
+export const LIMITS = { email: 255, fullName: 255, passwordMin: 8, passwordMax: 72, title: 255, description: 255 }
 
 /** Translator of the "Validation" messages. */
-export type ValidationT = (key: "required" | "email" | "tooLong" | "passwordLength" | "passwordsMismatch") => string
+export type ValidationT = (
+  key: "required" | "email" | "tooLong" | "passwordLength" | "passwordTooLong" | "passwordsMismatch",
+) => string
 
 const email = (t: ValidationT) =>
   z
@@ -24,6 +26,10 @@ const password = (t: ValidationT) =>
     .string()
     .min(LIMITS.passwordMin, { error: t("passwordLength") })
     .max(LIMITS.passwordMax, { error: t("passwordLength") })
+    // bcrypt takes 72 bytes, and the backend rejects a longer password instead of cutting it
+    .refine((value: string): boolean => new TextEncoder().encode(value).length <= LIMITS.passwordMax, {
+      error: t("passwordTooLong"),
+    })
 
 const fullName = (t: ValidationT) =>
   z
@@ -60,7 +66,30 @@ export const resetPasswordSchema = (t: ValidationT) => withConfirmation(t, { new
 export const changePasswordSchema = (t: ValidationT) =>
   withConfirmation(t, { currentPassword: z.string().min(1, t("required")), newPassword: password(t) }, "newPassword")
 
-export const profileSchema = (t: ValidationT) => z.object({ fullName: fullName(t), email: email(t) })
+/**
+ * Compares two email addresses the way the backend does: the case does not matter.
+ * @param a - An address.
+ * @param b - Another address.
+ * @returns True when they are the same account.
+ */
+export function isSameEmail(a: string, b: string): boolean {
+  return a.trim().toLowerCase() === b.trim().toLowerCase()
+}
+
+/**
+ * Schema of the profile form.
+ * @param t - The translator of the validation messages.
+ * @param currentEmail - The user's email now: another one requires the current password.
+ * @returns The schema.
+ */
+export const profileSchema = (t: ValidationT, currentEmail: string) =>
+  z
+    .object({ fullName: fullName(t), email: email(t), currentPassword: z.string() })
+    .refine(
+      (data: { email: string; currentPassword: string }): boolean =>
+        isSameEmail(data.email, currentEmail) || data.currentPassword.length > 0,
+      { error: t("required"), path: ["currentPassword"] },
+    )
 
 export const itemSchema = (t: ValidationT) =>
   z.object({

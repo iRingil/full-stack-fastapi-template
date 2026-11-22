@@ -11,14 +11,25 @@ describe("matchesPath", () => {
 })
 
 describe("safeRedirectPath", () => {
-  it("keeps a local path with its query", () => {
+  it("keeps a local path with its query and hash", () => {
     expect(safeRedirectPath("/items?page=2")).toBe("/items?page=2")
+    expect(safeRedirectPath("/settings#password")).toBe("/settings#password")
   })
 
-  it.each([null, undefined, "", "https://evil.example", "//evil.example", "/\\evil.example", "items"])(
-    "falls back to the dashboard for %j",
-    (from) => {
-      expect(safeRedirectPath(from)).toBe(DASHBOARD_PATH)
-    },
-  )
+  // The browser drops tabs and line breaks from a URL and reads "\\" as "/": all of these lead to another site
+  it.each([
+    null,
+    undefined,
+    "",
+    "https://evil.example",
+    "//evil.example",
+    "/\\evil.example",
+    "/\t/evil.example",
+    "/\n/evil.example",
+    "/\t\\evil.example",
+    "//[",
+    "items",
+  ])("falls back to the dashboard for %j", (from) => {
+    expect(safeRedirectPath(from)).toBe(DASHBOARD_PATH)
+  })
 })

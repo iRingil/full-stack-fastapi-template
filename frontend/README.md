@@ -84,6 +84,7 @@ cd .next/standalone && PORT=5173 API_URL=http://127.0.0.1:8000 SITE_URL=https://
 ```
 
 - `API_URL` and `SITE_URL` are read at runtime, so one build serves any environment.
-- Behind a reverse proxy (nginx) pass `Host` and `X-Forwarded-For` to Next.js; run the backend's Uvicorn with
-  `--proxy-headers`, so that its rate limiter sees the visitor's IP rather than the Next.js server's.
+- Put nginx in front (`infrastructure/nginx/app.conf`): it terminates TLS, sets the security headers (CSP, HSTS),
+  limits the request size and overwrites `X-Forwarded-For` with the visitor's address. Run the backend's Uvicorn
+  with `--proxy-headers`, so that its rate limiters count per visitor; neither server may be reachable past nginx.
 - Set the backend's `FRONTEND_HOST` to the site's address: it builds the links in the emails.

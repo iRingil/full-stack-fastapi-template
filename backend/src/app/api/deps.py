@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Annotated
 from uuid import UUID
 
 import jwt
-from fastapi import Depends, HTTPException, Request, params, status
+from fastapi import Depends, HTTPException, Query, Request, params, status
 from fastapi.security import OAuth2PasswordBearer
 from jwt.exceptions import InvalidTokenError
 from sqlmodel.ext.asyncio.session import AsyncSession
@@ -24,17 +24,25 @@ if TYPE_CHECKING:
     from starlette.datastructures import Address
 
 __all__: tuple[str, ...] = (
+    "ALL_LIMITERS",
     "CurrentSuperuser",
     "CurrentUser",
     "DbManagerDep",
     "EmailManagerDep",
+    "FailedLoginsDep",
     "ItemCrudDep",
+    "LimitQuery",
+    "LoginRateLimiter",
     "OptionalCurrentUser",
+    "PasswordRecoveryRateLimiter",
+    "RateLimiterProvider",
     "ResendVerificationRateLimiter",
-    "ResendVerificationRateLimiterProvider",
     "SecurityManagerDep",
     "SessionDep",
     "SettingsDep",
+    "SignupRateLimiter",
+    "SkipQuery",
+    "SlidingWindowLimiter",
     "UserCrudDep",
 )
 
@@ -72,34 +80,66 @@ async def _get_session(db_manager: DbManagerDep) -> AsyncGenerator[AsyncSession]
 SessionDep = Annotated[AsyncSession, Depends(_get_session)]
 
 
-def _decode_user_id_from_token(*, token: str, settings: Settings, security_manager: SecurityManager) -> UUID:
+def _credentials_error() -> HTTPException:
     """
-    Decodes an access token and extracts the user ID.
+    The answer to any token that does not authenticate an active user.
 
-    :param token: The JWT access token.
-    :param settings: Application settings.
-    :param security_manager: Security manager instance.
-    :return: The UUID of the user.
-    :raises HTTPException: 401 if the token is invalid or cannot be decoded.
+    Always 401, whatever the reason (a bad or revoked token, a deleted or deactivated user): the client logs out
+    on 401, and the reason is not revealed.
+
+    :return: The exception to raise.
     """
-    credentials_error: HTTPException = HTTPException(
+    return HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
+
+
+def _decode_access_token(*, token: str, settings: Settings, security_manager: SecurityManager) -> tuple[UUID, object]:
+    """
+    Decodes an access token and extracts the user ID and the token version.
+
+    :param token: The JWT access token.
+    :param settings: Application settings.
+    :param security_manager: Security manager instance.
+    :return: The UUID of the user and the token version claim (None if the token has none).
+    :raises HTTPException: 401 if the token is invalid or cannot be decoded.
+    """
     try:
         payload: dict[str, object] = jwt.decode(
             jwt=token, key=settings.security.secret_key.get_secret_value(), algorithms=[security_manager.ALGORITHM]
         )
     except InvalidTokenError as exc:
-        raise credentials_error from exc
+        raise _credentials_error() from exc
     subject: object = payload.get("sub")
     if not isinstance(subject, str):
-        raise credentials_error
+        raise _credentials_error()
     try:
-        return UUID(hex=subject)
+        return UUID(hex=subject), payload.get(security_manager.VERSION_CLAIM)
     except ValueError as exc:
-        raise credentials_error from exc
+        raise _credentials_error() from exc
+
+
+async def _get_user_from_token(
+    *, token: str, settings: Settings, user_crud: UserCRUD, security_manager: SecurityManager
+) -> User:
+    """
+    Decodes an access token and loads its user.
+
+    :param token: The JWT access token.
+    :param settings: Application settings.
+    :param user_crud: An instance of UserCRUD to load the user.
+    :param security_manager: Security manager instance.
+    :return: The active user the token was issued to.
+    :raises HTTPException: 401 if the token is invalid or revoked, or the user is deleted or inactive.
+    """
+    user_id, version = _decode_access_token(token=token, settings=settings, security_manager=security_manager)
+    user: User | None = await user_crud.get_by_id(obj_id=user_id)
+    # A logout, a new password or a password reset raises the user's token version and so revokes the token
+    if not user or not user.is_active or version != user.token_version:
+        raise _credentials_error()
+    return user
 
 
 # 4. Class-based dependencies (providers)
@@ -148,15 +188,11 @@ class CurrentUserProvider:
         :param user_crud: An instance of UserCRUD to perform user retrieval operations.
         :param security_manager: An instance of SecurityManager to handle token decoding.
         :return: The User object corresponding to the token's subject (user ID).
-        :raises HTTPException: If the token is invalid, the user is not found, or the user is inactive.
+        :raises HTTPException: 401 if the token is invalid or revoked, or the user is deleted or inactive.
         """
-        user_id: UUID = _decode_user_id_from_token(token=token, settings=settings, security_manager=security_manager)
-        user: User | None = await user_crud.get_by_id(obj_id=user_id)
-        if not user:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-        if not user.is_active:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Inactive user")
-        return user
+        return await _get_user_from_token(
+            token=token, settings=settings, user_crud=user_crud, security_manager=security_manager
+        )
 
 
 class OptionalCurrentUserProvider:
@@ -181,15 +217,11 @@ class OptionalCurrentUserProvider:
         if not token:
             return None
         try:
-            user_id: UUID = _decode_user_id_from_token(
-                token=token, settings=settings, security_manager=security_manager
+            return await _get_user_from_token(
+                token=token, settings=settings, user_crud=user_crud, security_manager=security_manager
             )
         except HTTPException:
             return None
-        user: User | None = await user_crud.get_by_id(obj_id=user_id)
-        if user and not user.is_active:
-            return None
-        return user
 
 
 class ActiveSuperuserProvider:
@@ -208,49 +240,141 @@ class ActiveSuperuserProvider:
         return current_user
 
 
-class ResendVerificationRateLimiterProvider:
+class SlidingWindowLimiter:
     """
-    Limits requests for a new verification email to one per interval per client IP.
+    Counts events per key (a client IP, an account) within a sliding time window.
 
-    The state lives in the memory of one worker process: with several workers a client gets one request per worker.
-    Behind a reverse proxy, run Uvicorn with --proxy-headers so that the client IP is not the proxy's.
+    The state lives in the memory of one worker process: with several workers every worker counts on its own.
     """
 
-    def __init__(self, interval_seconds: float = 60.0) -> None:
+    def __init__(self, *, limit: int, interval_seconds: float) -> None:
+        """
+        Initializes the limiter.
+
+        :param limit: How many events one key may have within the interval.
+        :param interval_seconds: The length of the window.
+        """
+        self._limit: int = limit
+        self._interval_seconds: float = interval_seconds
+        self._events: dict[str, list[float]] = {}
+
+    def _prune(self) -> None:
+        """
+        Forgets the events older than the window, so that the memory stays bounded.
+
+        :return: None
+        """
+        oldest: float = monotonic() - self._interval_seconds
+        kept: dict[str, list[float]] = {
+            key: [moment for moment in moments if moment > oldest] for key, moments in self._events.items()
+        }
+        self._events = {key: moments for key, moments in kept.items() if moments}
+
+    def is_exceeded(self, key: str) -> bool:
+        """
+        Checks whether a key has used up its limit.
+
+        :param key: The key.
+        :return: True if the key already has the allowed number of events within the window.
+        """
+        self._prune()
+        return len(self._events.get(key, [])) >= self._limit
+
+    def add(self, key: str) -> None:
+        """
+        Records an event of a key.
+
+        :param key: The key.
+        :return: None
+        """
+        self._events.setdefault(key, []).append(monotonic())
+
+    def clear(self, key: str | None = None) -> None:
+        """
+        Forgets the events of a key, or of all the keys.
+
+        :param key: The key; None for all.
+        :return: None
+        """
+        if key is None:
+            self._events.clear()
+        else:
+            self._events.pop(key, None)
+
+
+class RateLimiterProvider:
+    """
+    Class dependency that limits the requests of a route per client IP.
+
+    The client IP is the one Uvicorn reports: behind a reverse proxy run it with --proxy-headers, and let the
+    proxy overwrite X-Forwarded-For with the real peer address (infrastructure/nginx), or a client sets its own.
+    """
+
+    def __init__(self, *, limit: int, interval_seconds: float = 60.0) -> None:
         """
         Initializes the rate limiter.
 
-        :param interval_seconds: The minimal interval between two requests from one IP.
+        :param limit: How many requests one IP may make within the interval.
+        :param interval_seconds: The length of the window.
         """
-        self._interval_seconds: float = interval_seconds
-        self._last_request_at: dict[str, float] = {}
+        self.limiter: SlidingWindowLimiter = SlidingWindowLimiter(limit=limit, interval_seconds=interval_seconds)
 
     async def __call__(self, request: Request) -> None:
         """
-        Checks whether the client's IP is rate-limited.
+        Checks whether the client's IP is rate-limited, and counts the request.
 
         :param request: The FastAPI request object to get the client's IP.
         :return: None if the request is allowed.
-        :raises HTTPException: 429 if the client has already made a request within the interval.
+        :raises HTTPException: 429 if the client has used up its requests within the interval.
         """
-        now: float = monotonic()
-        # Forget the expired entries so that the memory stays bounded
-        self._last_request_at = {
-            ip: moment for ip, moment in self._last_request_at.items() if now - moment < self._interval_seconds
-        }
         client: Address | None = request.client
         ip_address: str = client.host if client else "unknown"
-        if ip_address in self._last_request_at:
+        if self.limiter.is_exceeded(key=ip_address):
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                 detail="Too many requests. Please wait a minute before trying again.",
             )
-        self._last_request_at[ip_address] = now
+        self.limiter.add(key=ip_address)
+
+
+_resend_verification_limiter: RateLimiterProvider = RateLimiterProvider(limit=1)
+_login_limiter: RateLimiterProvider = RateLimiterProvider(limit=10)
+_password_recovery_limiter: RateLimiterProvider = RateLimiterProvider(limit=3)
+_signup_limiter: RateLimiterProvider = RateLimiterProvider(limit=5)
+# Failed logins per account, whatever IP they come from: 5 within 15 minutes lock the account's login for that time
+_failed_logins: SlidingWindowLimiter = SlidingWindowLimiter(limit=5, interval_seconds=15 * 60.0)
+
+# Every limiter of the application, for the tests to reset
+ALL_LIMITERS: tuple[SlidingWindowLimiter, ...] = (
+    _resend_verification_limiter.limiter,
+    _login_limiter.limiter,
+    _password_recovery_limiter.limiter,
+    _signup_limiter.limiter,
+    _failed_logins,
+)
+
+
+def _get_failed_logins() -> SlidingWindowLimiter:
+    """
+    Dependency for the counter of failed logins per account.
+
+    :return: The limiter.
+    """
+    return _failed_logins
 
 
 # 5. Final dependency aliases for use in path operations
 CurrentUser = Annotated[User, Depends(CurrentUserProvider())]
 CurrentSuperuser = Annotated[User, Depends(ActiveSuperuserProvider())]
 OptionalCurrentUser = Annotated[User | None, Depends(OptionalCurrentUserProvider())]
-# A dependency object for 'dependencies=[...]' of a route; fastapi.Depends() would be typed as Any
-ResendVerificationRateLimiter: params.Depends = params.Depends(dependency=ResendVerificationRateLimiterProvider())
+FailedLoginsDep = Annotated[SlidingWindowLimiter, Depends(_get_failed_logins)]
+# Dependency objects for 'dependencies=[...]' of a route; fastapi.Depends() would be typed as Any
+ResendVerificationRateLimiter: params.Depends = params.Depends(dependency=_resend_verification_limiter)
+LoginRateLimiter: params.Depends = params.Depends(dependency=_login_limiter)
+PasswordRecoveryRateLimiter: params.Depends = params.Depends(dependency=_password_recovery_limiter)
+SignupRateLimiter: params.Depends = params.Depends(dependency=_signup_limiter)
+
+# 6. Pagination: bounded, so that a request can neither ask for the whole table nor crash the query
+MAX_PAGE_SIZE: int = 100
+SkipQuery = Annotated[int, Query(ge=0, le=2**31 - 1, description="The number of rows to skip")]
+LimitQuery = Annotated[int, Query(ge=1, le=MAX_PAGE_SIZE, description="The maximum number of rows to return")]

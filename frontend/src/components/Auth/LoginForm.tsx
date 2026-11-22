@@ -14,8 +14,8 @@ import { FormAlert } from "@/components/ui/FormAlert"
 import { FormPasswordField } from "@/components/ui/FormPasswordField"
 import { FormTextField } from "@/components/ui/FormTextField"
 import { useAuth } from "@/hooks/useAuth"
+import { useErrorMessage } from "@/hooks/useErrorMessage"
 import { Link, useRouter } from "@/i18n/navigation"
-import { errorMessage } from "@/lib/api-error"
 import { safeRedirectPath } from "@/lib/paths"
 import { loginSchema } from "@/lib/validation"
 import { AuthCard } from "./AuthCard"
@@ -31,6 +31,7 @@ export function LoginForm(): ReactNode {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { login } = useAuth()
+  const errorMessage = useErrorMessage()
   const {
     control,
     handleSubmit,
@@ -43,7 +44,7 @@ export function LoginForm(): ReactNode {
       await login.mutateAsync(values)
       router.replace(safeRedirectPath(searchParams.get("from")))
     } catch (error) {
-      setError("root", { message: errorMessage(error, tc("errorGeneric")) })
+      setError("root", { message: errorMessage(error) })
     }
   })
 

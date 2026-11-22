@@ -9,6 +9,7 @@ The requests go to the real application over the test database; letters are reco
 from email.message import EmailMessage
 from uuid import uuid4
 
+import pytest
 from httpx import AsyncClient, Response
 from sqlmodel import func, select
 from sqlmodel.ext.asyncio.session import AsyncSession
@@ -18,6 +19,10 @@ from app.models import Item, User
 from tests.conftest import USER_PASSWORD, AuthHeaders, ItemFactory, UserFactory, html_of
 
 __all__: tuple[str, ...] = ()
+
+_SIGNUP_ANSWER: str = (
+    "If this email is not registered yet, the account has been created and a confirmation link has been sent to it."
+)
 
 
 async def _count(session: AsyncSession, model: type[User | Item]) -> int:
@@ -204,12 +209,60 @@ class TestMe:
         """
         user: User = await create_user(is_email_verified=True)
         response: Response = await client.patch(
-            url="/users/me", json={"email": "new@example.com"}, headers=auth_headers(user)
+            url="/users/me",
+            json={"email": "New@Example.com", "current_password": USER_PASSWORD},
+            headers=auth_headers(user),
         )
         assert response.status_code == 200
         assert response.json()["email"] == "new@example.com"
         assert response.json()["is_email_verified"] is False
         assert [letter["To"] for letter in outbox] == ["new@example.com"]
+
+    @pytest.mark.parametrize(argnames="password", argvalues=[None, "wrong-password"], ids=["missing", "wrong"])
+    async def test_a_new_email_needs_the_current_password(
+        self,
+        client: AsyncClient,
+        create_user: UserFactory,
+        auth_headers: AuthHeaders,
+        session: AsyncSession,
+        password: str | None,
+    ) -> None:
+        """
+        Without the right current password the email is not changed.
+
+        :param client: The HTTP client of the application.
+        :param create_user: The user factory.
+        :param auth_headers: Builds the Authorization header of a user.
+        :param session: The test session.
+        :param password: The current password sent with the request, or None to leave it out.
+        :return: None
+        """
+        user: User = await create_user()
+        body: dict[str, str] = {"email": "new@example.com"} | ({"current_password": password} if password else {})
+        response: Response = await client.patch(url="/users/me", json=body, headers=auth_headers(user))
+        assert response.status_code == 400
+        assert response.json()["detail"] == "Incorrect password"
+        await session.refresh(instance=user)
+        assert user.email == "user@example.com"
+
+    @pytest.mark.parametrize(
+        argnames="body", argvalues=[{"email": None}, {"full_name": "a\x00b"}], ids=["null-email", "nul-character"]
+    )
+    async def test_rejects_values_the_database_cannot_store(
+        self, client: AsyncClient, create_user: UserFactory, auth_headers: AuthHeaders, body: dict[str, object]
+    ) -> None:
+        """
+        A null email and a NUL character are validation errors, not database errors.
+
+        :param client: The HTTP client of the application.
+        :param create_user: The user factory.
+        :param auth_headers: Builds the Authorization header of a user.
+        :param body: The request body.
+        :return: None
+        """
+        user: User = await create_user()
+        response: Response = await client.patch(url="/users/me", json=body, headers=auth_headers(user))
+        assert response.status_code == 422
 
     async def test_the_same_email_is_not_a_change(
         self,
@@ -247,7 +300,9 @@ class TestMe:
         user: User = await create_user()
         await create_user(email="taken@example.com")
         response: Response = await client.patch(
-            url="/users/me", json={"email": "taken@example.com"}, headers=auth_headers(user)
+            url="/users/me",
+            json={"email": "taken@example.com", "current_password": USER_PASSWORD},
+            headers=auth_headers(user),
         )
         assert response.status_code == 409
 
@@ -317,14 +372,40 @@ class TestUpdatePasswordMe:
         :return: None
         """
         user: User = await create_user()
+        headers: dict[str, str] = auth_headers(user)
         response: Response = await client.patch(
             url="/users/me/password",
             json={"current_password": USER_PASSWORD, "new_password": "brand-new-password"},
-            headers=auth_headers(user),
+            headers=headers,
         )
         assert response.status_code == 200
         await session.refresh(instance=user)
         assert await user_crud.authenticate(email=user.email, password="brand-new-password") is not None
+        # The token issued before the change is revoked
+        assert (await client.get(url="/users/me", headers=headers)).status_code == 401
+
+    @pytest.mark.parametrize(
+        argnames="new_password", argvalues=["Password123", "й" * 37], ids=["too-common", "over-72-bytes"]
+    )
+    async def test_rejects_a_weak_or_too_long_password(
+        self, client: AsyncClient, create_user: UserFactory, auth_headers: AuthHeaders, new_password: str
+    ) -> None:
+        """
+        A common password, and one that bcrypt would have to cut (over 72 bytes in UTF-8), are validation errors.
+
+        :param client: The HTTP client of the application.
+        :param create_user: The user factory.
+        :param auth_headers: Builds the Authorization header of a user.
+        :param new_password: The password to set.
+        :return: None
+        """
+        user: User = await create_user()
+        response: Response = await client.patch(
+            url="/users/me/password",
+            json={"current_password": USER_PASSWORD, "new_password": new_password},
+            headers=auth_headers(user),
+        )
+        assert response.status_code == 422
 
     async def test_wrong_current_password(
         self, client: AsyncClient, create_user: UserFactory, auth_headers: AuthHeaders
@@ -370,35 +451,65 @@ class TestUpdatePasswordMe:
 class TestRegisterUser:
     """Tests for POST /users/signup."""
 
-    async def test_registers_and_sends_a_welcome_letter(self, client: AsyncClient, outbox: list[EmailMessage]) -> None:
+    async def test_registers_and_sends_a_welcome_letter(
+        self, client: AsyncClient, outbox: list[EmailMessage], user_crud: UserCRUD
+    ) -> None:
         """
-        Anyone can register; the new user is unverified and gets a welcome letter.
+        Anyone can register; the new user is unverified, not a superuser, and gets a welcome letter.
 
         :param client: The HTTP client of the application.
         :param outbox: The letters sent during the test.
+        :param user_crud: The UserCRUD over the test session.
         :return: None
         """
         response: Response = await client.post(
-            url="/users/signup", json={"email": "new@example.com", "password": "new-user-password"}
+            url="/users/signup", json={"email": "New@Example.com", "password": "new-user-password"}
         )
-        assert response.status_code == 201
-        assert response.json()["is_email_verified"] is False
-        assert response.json()["is_superuser"] is False
+        assert response.status_code == 200
+        assert response.json() == {"message": _SIGNUP_ANSWER}
+        user: User | None = await user_crud.get_by_email(email="new@example.com")
+        assert user is not None
+        assert not user.is_email_verified
+        assert not user.is_superuser
         assert [letter["Subject"] for letter in outbox] == ["Test Project - Welcome aboard!"]
 
-    async def test_existing_email(self, client: AsyncClient, create_user: UserFactory) -> None:
+    async def test_existing_email(
+        self, client: AsyncClient, create_user: UserFactory, outbox: list[EmailMessage], user_crud: UserCRUD
+    ) -> None:
         """
-        An email that is already taken gives 400.
+        A taken email (in any case) gets the same answer as a new one; the account stays as it was, nothing is sent.
 
         :param client: The HTTP client of the application.
         :param create_user: The user factory.
+        :param outbox: The letters sent during the test.
+        :param user_crud: The UserCRUD over the test session.
         :return: None
         """
         user: User = await create_user()
         response: Response = await client.post(
-            url="/users/signup", json={"email": user.email, "password": "new-user-password"}
+            url="/users/signup", json={"email": user.email.upper(), "password": "new-user-password"}
         )
-        assert response.status_code == 400
+        assert response.status_code == 200
+        assert response.json() == {"message": _SIGNUP_ANSWER}
+        assert outbox == []
+        assert await user_crud.authenticate(email=user.email, password="new-user-password") is None
+
+    async def test_requests_per_ip_are_limited(self, client: AsyncClient) -> None:
+        """
+        The sixth registration of one IP within a minute gets 429.
+
+        :param client: The HTTP client of the application.
+        :return: None
+        """
+        statuses: list[int] = [
+            (
+                await client.post(
+                    url="/users/signup", json={"email": f"new{number}@example.com", "password": "new-user-password"}
+                )
+            ).status_code
+            for number in range(6)
+        ]
+        assert statuses == [200] * 5 + [429]
 
 
 class TestReadUserById:
@@ -490,6 +601,28 @@ class TestUpdateUser:
         assert response.status_code == 200
         assert response.json()["email"] == "changed@example.com"
         assert response.json()["is_active"] is False
+
+    @pytest.mark.parametrize(argnames="body", argvalues=[{"is_active": False}, {"is_superuser": False}])
+    async def test_superuser_cannot_deactivate_or_demote_themselves(
+        self, client: AsyncClient, create_user: UserFactory, auth_headers: AuthHeaders, body: dict[str, bool]
+    ) -> None:
+        """
+        Superusers cannot lock themselves out of the administration; their other fields can still be changed.
+
+        :param client: The HTTP client of the application.
+        :param create_user: The user factory.
+        :param auth_headers: Builds the Authorization header of a user.
+        :param body: The request body.
+        :return: None
+        """
+        superuser: User = await create_user(is_superuser=True)
+        headers: dict[str, str] = auth_headers(superuser)
+        response: Response = await client.patch(url=f"/users/{superuser.id}", json=body, headers=headers)
+        assert response.status_code == 403
+        renamed: Response = await client.patch(
+            url=f"/users/{superuser.id}", json={"full_name": "Boss", "is_active": True}, headers=headers
+        )
+        assert renamed.status_code == 200
 
     async def test_without_an_email(
         self, client: AsyncClient, create_user: UserFactory, auth_headers: AuthHeaders

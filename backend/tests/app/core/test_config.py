@@ -42,6 +42,19 @@ class TestSettings:
         assert settings.superuser.email == "admin@example.com"
         assert settings.security.access_token_expire_minutes == 60 * 24 * 8
 
+    def test_environment_is_required(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """
+        Without ENVIRONMENT the settings do not load.
+
+        A server must never fall back to "local": the API docs, the debug mode and the unauthenticated private router.
+
+        :param monkeypatch: pytest's monkeypatch fixture.
+        :return: None
+        """
+        monkeypatch.delenv(name="ENVIRONMENT")
+        with pytest.raises(ValidationError, match="environment"):
+            _load(cls=AppSettings)
+
     def test_sender_name_defaults_to_the_project_name(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """
         Without a sender name the project name is used; a given name is kept.
@@ -104,7 +117,9 @@ class TestAppSettings:
 
         :return: None
         """
-        app: AppSettings = AppSettings(project_name="P", backend_cors_origins=[AnyHttpUrl("http://a.example")])
+        app: AppSettings = AppSettings(
+            project_name="P", environment="local", backend_cors_origins=[AnyHttpUrl("http://a.example")]
+        )
         assert app.all_cors_origins == ["http://a.example", "http://localhost:5173"]
 
     def test_cors_origins_must_be_urls(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -125,7 +140,9 @@ class TestAppSettings:
         :return: None
         """
         assert (
-            AppSettings(project_name="P", frontend_host=HttpUrl("https://example.com/")).frontend_url
+            AppSettings(
+                project_name="P", environment="local", frontend_host=HttpUrl("https://example.com/")
+            ).frontend_url
             == "https://example.com"
         )
 
@@ -202,12 +219,12 @@ class TestSecrets:
         with pytest.raises(ValidationError):
             SecuritySettings(secret_key=SecretStr("too-short"))
 
-    @pytest.mark.parametrize(argnames="password", argvalues=["short", "x" * 41])
+    @pytest.mark.parametrize(argnames="password", argvalues=["short", "x" * 73])
     def test_superuser_password_follows_the_user_password_limits(
         self, monkeypatch: pytest.MonkeyPatch, password: str
     ) -> None:
         """
-        The first superuser's password must fit the limits of any user password (8-40 characters).
+        The first superuser's password must fit the limits of any user password (8-72 characters).
 
         :param monkeypatch: pytest's monkeypatch fixture.
         :param password: The password.

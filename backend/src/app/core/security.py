@@ -16,8 +16,8 @@ class SecurityManager:
     """Manages security operations like password hashing and JWT token handling."""
 
     ALGORITHM: ClassVar[str] = "HS256"
-    # bcrypt uses only the first 72 bytes of a password; bcrypt>=5 raises instead of truncating silently
-    _BCRYPT_MAX_BYTES: ClassVar[int] = 72
+    # The claim with User.token_version: a token of another version is revoked
+    VERSION_CLAIM: ClassVar[str] = "ver"
 
     def __init__(self, settings: Settings) -> None:
         """
@@ -26,33 +26,28 @@ class SecurityManager:
         :param settings: The application settings object.
         """
         self._settings: Settings = settings
+        self._dummy_hash: str | None = None
 
-    def create_access_token(self, subject: str, expires_delta: timedelta) -> str:
+    def create_access_token(self, subject: str, expires_delta: timedelta, version: int = 0) -> str:
         """
         Creates a new JWT access token.
 
         :param subject: The subject of the token (the user ID).
         :param expires_delta: The lifespan of the token.
+        :param version: The token version of the user (User.token_version) at the time of issue.
         :return: The encoded JWT token as a string.
         """
         expire: datetime = datetime.now(tz=UTC) + expires_delta
-        to_encode: dict[str, datetime | str] = {"exp": expire, "sub": subject}
+        to_encode: dict[str, datetime | int | str] = {"exp": expire, "sub": subject, self.VERSION_CLAIM: version}
         return jwt.encode(
             payload=to_encode, key=self._settings.security.secret_key.get_secret_value(), algorithm=self.ALGORITHM
         )
 
-    def _encode_password(self, password: str) -> bytes:
-        """
-        Encodes a password for bcrypt, truncated to 72 bytes as older bcrypt versions (and passlib) did.
-
-        :param password: The plain text password.
-        :return: The password bytes accepted by bcrypt.
-        """
-        return password.encode(encoding="utf-8")[: self._BCRYPT_MAX_BYTES]
-
     def verify_password(self, plain_password: str, hashed_password: str) -> bool:
         """
         Verifies a plain password against its hashed version.
+
+        bcrypt takes at most 72 bytes and the password is never truncated: a longer one does not match.
 
         :param plain_password: The plain text password.
         :param hashed_password: The hashed password from the database.
@@ -60,20 +55,34 @@ class SecurityManager:
         """
         try:
             return bcrypt.checkpw(
-                password=self._encode_password(password=plain_password),
+                password=plain_password.encode(encoding="utf-8"),
                 hashed_password=hashed_password.encode(encoding="utf-8"),
             )
         except ValueError:
             return False
 
+    def verify_dummy_password(self, plain_password: str) -> None:
+        """
+        Spends the time of a real password check when there is no user to check against.
+
+        Without it a login with an unknown email answers much faster than one with a wrong password, which reveals
+        the registered addresses.
+
+        :param plain_password: The password from the login form.
+        :return: None
+        """
+        if self._dummy_hash is None:
+            self._dummy_hash = self.get_password_hash(password="a-password-nobody-has")  # noqa: S106 - not a secret
+        self.verify_password(plain_password=plain_password, hashed_password=self._dummy_hash)
+
     def get_password_hash(self, password: str) -> str:
         """
         Hashes a plain password.
 
-        :param password: The plain text password to hash.
+        :param password: The plain text password to hash, at most 72 bytes in UTF-8 (the models validate it).
         :return: The hashed password as a string.
         """
-        return bcrypt.hashpw(password=self._encode_password(password=password), salt=bcrypt.gensalt()).decode()
+        return bcrypt.hashpw(password=password.encode(encoding="utf-8"), salt=bcrypt.gensalt()).decode()
 
 
 @lru_cache(maxsize=1)

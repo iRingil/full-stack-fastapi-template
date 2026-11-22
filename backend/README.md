@@ -74,7 +74,7 @@ Database connection and disconnection are now managed through the modern lifespa
 Key environment variables for configuration:
 
    ```dotenv
-   # Environment: local, staging, or production
+   # Environment (required): local, staging, or production; local opens the API docs and the private router
    ENVIRONMENT=local
    # PostgreSQL
    POSTGRES_SERVER=localhost

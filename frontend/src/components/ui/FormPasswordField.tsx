@@ -4,7 +4,7 @@
 
 "use client"
 
-import { Button, FieldError, InputGroup, Label, TextField } from "@heroui/react"
+import { Button, Description, FieldError, InputGroup, Label, TextField } from "@heroui/react"
 import { useTranslations } from "next-intl"
 import { type ReactNode, useState } from "react"
 import { type Control, type FieldPath, type FieldValues, useController } from "react-hook-form"
@@ -17,6 +17,7 @@ export type FormPasswordFieldProps<T extends FieldValues> = {
   label: string
   /** "current-password" on login, "new-password" when the password is set. */
   autoComplete: "current-password" | "new-password"
+  description?: string
   isRequired?: boolean
 }
 
@@ -30,6 +31,7 @@ export function FormPasswordField<T extends FieldValues>({
   name,
   label,
   autoComplete,
+  description,
   isRequired,
 }: FormPasswordFieldProps<T>): ReactNode {
   const t = useTranslations("Common")
@@ -64,6 +66,7 @@ export function FormPasswordField<T extends FieldValues>({
           </Button>
         </InputGroup.Suffix>
       </InputGroup>
+      {description ? <Description>{description}</Description> : null}
       <FieldError>{fieldState.error?.message}</FieldError>
     </TextField>
   )

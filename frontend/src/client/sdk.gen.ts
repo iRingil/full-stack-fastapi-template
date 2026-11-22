@@ -29,6 +29,8 @@ import type {
   LoginAccessTokenData,
   LoginAccessTokenErrors,
   LoginAccessTokenResponses,
+  LogoutData,
+  LogoutResponses,
   ReadItemData,
   ReadItemErrors,
   ReadItemResponses,
@@ -101,7 +103,7 @@ export type Options<
 /**
  * Login for Access Token
  *
- * OAuth2 compatible token login, get an access token for future requests.
+ * OAuth2 compatible token login, get an access token for future requests. Limited to 10 requests per minute per IP address and to 5 failed attempts per 15 minutes per account.
  */
 export const loginAccessToken = <ThrowOnError extends boolean = false>(
   options: Options<LoginAccessTokenData, ThrowOnError>,
@@ -114,6 +116,20 @@ export const loginAccessToken = <ThrowOnError extends boolean = false>(
       "Content-Type": "application/x-www-form-urlencoded",
       ...options.headers,
     },
+  })
+
+/**
+ * Logout
+ *
+ * Revoke the access tokens of the current user: a logout from all devices.
+ */
+export const logout = <ThrowOnError extends boolean = false>(
+  options?: Options<LogoutData, ThrowOnError>,
+): RequestResult<LogoutResponses, unknown, ThrowOnError> =>
+  (options?.client ?? client).post<LogoutResponses, unknown, ThrowOnError>({
+    security: [{ scheme: "bearer", type: "http" }],
+    url: "/api/v1/logout",
+    ...options,
   })
 
 /**
@@ -133,14 +149,18 @@ export const testToken = <ThrowOnError extends boolean = false>(
 /**
  * Recover Password
  *
- * Send a password recovery email.
+ * Send a password recovery email. Limited to 3 requests per minute per IP address.
  */
 export const recoverPassword = <ThrowOnError extends boolean = false>(
   options: Options<RecoverPasswordData, ThrowOnError>,
 ): RequestResult<RecoverPasswordResponses, RecoverPasswordErrors, ThrowOnError> =>
   (options.client ?? client).post<RecoverPasswordResponses, RecoverPasswordErrors, ThrowOnError>({
-    url: "/api/v1/password-recovery/{email}",
+    url: "/api/v1/password-recovery/",
     ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
   })
 
 /**
@@ -204,8 +224,12 @@ export const recoverPasswordHtmlContent = <ThrowOnError extends boolean = false>
 ): RequestResult<RecoverPasswordHtmlContentResponses, RecoverPasswordHtmlContentErrors, ThrowOnError> =>
   (options.client ?? client).post<RecoverPasswordHtmlContentResponses, RecoverPasswordHtmlContentErrors, ThrowOnError>({
     security: [{ scheme: "bearer", type: "http" }],
-    url: "/api/v1/password-recovery-html-content/{email}",
+    url: "/api/v1/password-recovery-html-content/",
     ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
   })
 
 /**
@@ -307,7 +331,7 @@ export const updatePasswordMe = <ThrowOnError extends boolean = false>(
 /**
  * Register New User
  *
- * New user registration.
+ * New user registration. Limited to 5 requests per minute per IP address.
  */
 export const registerUser = <ThrowOnError extends boolean = false>(
   options: Options<RegisterUserData, ThrowOnError>,

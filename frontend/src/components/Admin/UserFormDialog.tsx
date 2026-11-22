@@ -97,7 +97,15 @@ export function UserFormDialog({
         }
       })}
     >
-      <FormTextField control={control} name="email" type="email" label={tc("email")} autoComplete="off" isRequired />
+      <FormTextField
+        control={control}
+        name="email"
+        type="email"
+        label={tc("email")}
+        autoComplete="off"
+        isRequired
+        autoFocus
+      />
       <FormTextField control={control} name="fullName" label={tc("fullName")} autoComplete="off" />
       <FormPasswordField
         control={control}

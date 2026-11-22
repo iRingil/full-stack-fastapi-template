@@ -115,40 +115,46 @@ class EmailManager:
         )
         try:
             await self._fm.send_message(message=message)
-            logger.info(f"Email sent to {email_to} with subject '{letter.subject}'")
+            # Neither the address nor the subject (it may carry the address) goes to the log
+            logger.info("Email sent")
         except Exception as exc:  # noqa: BLE001 - a failed delivery is logged, the caller is not interrupted
-            logger.error(f"Failed to send email to {email_to}: {describe_exception(exc=exc)}")
+            logger.error(f"Failed to send an email: {describe_exception(exc=exc)}")
 
     # Tokens
-    def _generate_token(self, *, email: str, purpose: TokenPurpose, expires_delta: timedelta) -> str:
+    def _generate_token(
+        self, *, email: str, purpose: TokenPurpose, expires_delta: timedelta, version: int | None = None
+    ) -> str:
         """
         Generates a JWT token for an email link.
 
         :param email: The subject of the token.
         :param purpose: What the token may be used for.
         :param expires_delta: The lifetime of the token.
+        :param version: The token version of the user, for a token that a new password must outdate.
         :return: The encoded JWT token as a string.
         """
         now: datetime = datetime.now(tz=UTC)
-        payload: dict[str, datetime | float | str] = {
+        payload: dict[str, datetime | float | int | str] = {
             "exp": (now + expires_delta).timestamp(),
             "nbf": now,
             "sub": email,
             self._PURPOSE_CLAIM: purpose,
         }
+        if version is not None:
+            payload[self._security_manager.VERSION_CLAIM] = version
         return jwt.encode(
             payload=payload,
             key=self._settings.security.secret_key.get_secret_value(),
             algorithm=self._security_manager.ALGORITHM,
         )
 
-    def _verify_token(self, *, token: str, purpose: TokenPurpose) -> str | None:
+    def _decode_token(self, *, token: str, purpose: TokenPurpose) -> dict[str, object] | None:
         """
-        Verifies a JWT token from an email link.
+        Decodes a JWT token from an email link.
 
         :param token: The JWT token to verify.
         :param purpose: What the token is expected to be used for.
-        :return: The email address of the user if the token is valid and has this purpose, None otherwise.
+        :return: The claims if the token is valid, has this purpose and an email as the subject, None otherwise.
         """
         try:
             decoded_token: dict[str, object] = jwt.decode(
@@ -160,27 +166,32 @@ class EmailManager:
             return None
         if decoded_token.get(self._PURPOSE_CLAIM) != purpose:
             return None
-        email: object = decoded_token.get("sub")
-        return email if isinstance(email, str) else None
+        return decoded_token if isinstance(decoded_token.get("sub"), str) else None
 
-    def generate_password_reset_token(self, email: str) -> str:
+    def generate_password_reset_token(self, email: str, version: int) -> str:
         """
         Generates a JWT token for password reset.
 
+        The token carries the user's token version: a new password raises the version, so the link works once and
+        the links sent earlier stop working too.
+
         :param email: The email address of the user.
+        :param version: The token version of the user (User.token_version).
         :return: The encoded JWT token as a string.
         """
         delta: timedelta = timedelta(hours=self._settings.security.email_reset_token_expire_hours)
-        return self._generate_token(email=email, purpose="password_reset", expires_delta=delta)
+        return self._generate_token(email=email, purpose="password_reset", expires_delta=delta, version=version)
 
-    def verify_password_reset_token(self, token: str) -> str | None:
+    def verify_password_reset_token(self, token: str) -> tuple[str, int] | None:
         """
         Verifies a password reset JWT token.
 
         :param token: The JWT token to verify.
-        :return: The email address of the user if the token is valid, None otherwise.
+        :return: The email address and the token version from the token if it is valid, None otherwise.
         """
-        return self._verify_token(token=token, purpose="password_reset")
+        claims: dict[str, object] | None = self._decode_token(token=token, purpose="password_reset")
+        version: object = claims.get(self._security_manager.VERSION_CLAIM) if claims else None
+        return (str(claims["sub"]), version) if claims and isinstance(version, int) else None
 
     def generate_email_verify_token(self, email: str) -> str:
         """
@@ -199,7 +210,8 @@ class EmailManager:
         :param token: The JWT token to verify.
         :return: The email address of the user if the token is valid, None otherwise.
         """
-        return self._verify_token(token=token, purpose="email_verify")
+        claims: dict[str, object] | None = self._decode_token(token=token, purpose="email_verify")
+        return str(claims["sub"]) if claims else None
 
     # Emails
     async def send_test_email(self, email_to: str) -> None:
@@ -216,14 +228,15 @@ class EmailManager:
         )
         await self._send_email(email_to=email_to, letter=letter)
 
-    async def render_reset_password_email(self, email_to: str) -> Letter:
+    async def render_reset_password_email(self, email_to: str, version: int) -> Letter:
         """
         Renders a password recovery email without sending it.
 
         :param email_to: The email address of the recipient.
+        :param version: The token version of the recipient (User.token_version).
         :return: The rendered letter.
         """
-        token: str = self.generate_password_reset_token(email=email_to)
+        token: str = self.generate_password_reset_token(email=email_to, version=version)
         return await self._render_letter(
             name="reset_password",
             subject=f"{self._settings.app.project_name} - Password recovery for user {email_to}",
@@ -236,14 +249,15 @@ class EmailManager:
             },
         )
 
-    async def send_reset_password_email(self, email_to: str) -> None:
+    async def send_reset_password_email(self, email_to: str, version: int) -> None:
         """
         Sends a password recovery email to the specified email address.
 
         :param email_to: The email address of the recipient.
+        :param version: The token version of the recipient (User.token_version).
         :return: None
         """
-        letter: Letter = await self.render_reset_password_email(email_to=email_to)
+        letter: Letter = await self.render_reset_password_email(email_to=email_to, version=version)
         await self._send_email(email_to=email_to, letter=letter)
 
     async def _send_verification_type_email(

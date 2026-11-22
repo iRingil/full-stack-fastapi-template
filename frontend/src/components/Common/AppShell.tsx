@@ -21,6 +21,7 @@ import { UserMenu } from "./UserMenu"
  */
 export function AppShell({ children }: { children: ReactNode }): ReactNode {
   const t = useTranslations("Nav")
+  const tc = useTranslations("Common")
   const [isMenuOpen, setMenuOpen] = useState<boolean>(false)
 
   return (
@@ -58,7 +59,7 @@ export function AppShell({ children }: { children: ReactNode }): ReactNode {
       <Drawer.Backdrop isOpen={isMenuOpen} onOpenChange={setMenuOpen}>
         <Drawer.Content placement="left">
           <Drawer.Dialog className="w-72">
-            <Drawer.CloseTrigger />
+            <Drawer.CloseTrigger aria-label={tc("close")} />
             <Drawer.Header>
               <Drawer.Heading>{t("menu")}</Drawer.Heading>
             </Drawer.Header>

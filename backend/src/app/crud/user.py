@@ -52,6 +52,8 @@ class UserCRUD(BaseCRUD[User, UserCreate, UserUpdate, UserPublic, UsersPublic]):
         extra_data: dict[str, object] = dict(update or {})
         if obj_in.password:
             extra_data["hashed_password"] = self._security.get_password_hash(password=obj_in.password)
+            # A new password ends every session and outdates the password reset links sent before
+            extra_data["token_version"] = db_obj.token_version + 1
         # The plain password must never reach the model
         user_data: dict[str, object] = obj_in.model_dump(exclude_unset=True, exclude={"password"})
         db_obj.sqlmodel_update(obj=user_data, update=extra_data)
@@ -62,13 +64,22 @@ class UserCRUD(BaseCRUD[User, UserCreate, UserUpdate, UserPublic, UsersPublic]):
 
     async def get_by_email(self, *, email: str | EmailStr) -> User | None:
         """
-        Retrieve a user by email.
+        Retrieve a user by email (emails are stored in lower case).
 
-        :param email: User's email address.
+        :param email: User's email address, in any case.
         :return: User object or None if not found.
         """
-        result = await self._session.exec(statement=select(User).where(User.email == email))
+        result = await self._session.exec(statement=select(User).where(User.email == email.lower()))
         return result.first()
+
+    async def revoke_tokens(self, *, db_obj: User) -> User:
+        """
+        Revokes every access and password reset token of a user: a logout from all devices.
+
+        :param db_obj: The user.
+        :return: The updated user.
+        """
+        return await self.update(db_obj=db_obj, obj_in=UserUpdate(), update={"token_version": db_obj.token_version + 1})
 
     async def authenticate(self, *, email: str | EmailStr, password: str) -> User | None:
         """
@@ -80,6 +91,8 @@ class UserCRUD(BaseCRUD[User, UserCreate, UserUpdate, UserPublic, UsersPublic]):
         """
         db_user: User | None = await self.get_by_email(email=email)
         if not db_user:
+            # The same time as for a wrong password, so that the answer does not reveal registered addresses
+            self._security.verify_dummy_password(plain_password=password)
             return None
         if not self._security.verify_password(plain_password=password, hashed_password=db_user.hashed_password):
             return None
