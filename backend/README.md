@@ -60,7 +60,14 @@ Database connection and disconnection are now managed through the modern lifespa
     pip install -r requirements.txt
     ```
 
-3. Run the server:
+3. Create the tables and the first superuser (from `src/`; run `alembic upgrade head` again after every update):
+
+    ```bash
+    alembic upgrade head
+    python -m app.initial_data
+    ```
+
+4. Run the server:
 
     ```bash
     uvicorn app.main:app --reload --log-config log_config.yaml

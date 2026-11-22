@@ -136,7 +136,7 @@ cp .env.example .env
 1. Fill in `backend/src/.env`: the empty variables of the example are required (`PROJECT_NAME`, `ENVIRONMENT`,
    `SECRET_KEY`, `FIRST_SUPERUSER`, `FIRST_SUPERUSER_PASSWORD`, `POSTGRES_SERVER`, `POSTGRES_USER`, `POSTGRES_DB`),
    the commented ones show their defaults. `ENVIRONMENT=local` opens the API docs at `/docs`.
-2. Create the tables and the first superuser: `cd backend/src && python -m app.initial_data`
+2. Create the tables and the first superuser: `cd backend/src && alembic upgrade head && python -m app.initial_data`
 3. Run the backend: `cd backend/src && uvicorn app.main:app --reload --log-config log_config.yaml`
 4. Run the frontend: `cd frontend && npm run dev`, then open [http://localhost:5173](http://localhost:5173)
 
@@ -161,12 +161,20 @@ ruff format src tests         # format
 basedpyright                  # type check (installed globally, reads the packages from .venv)
 pytest -c pyproject.toml tests --cov
 
+# Database migrations (from backend/src), after a change of app/models.py
+alembic revision --autogenerate -m "add item price"   # writes migrations/versions/<date>-<id>_add_item_price.py
+alembic upgrade head                                   # applies it
+
 # Frontend (from frontend/)
 npm run lint                  # Biome: lint and format
 npm run typecheck
 npm run coverage              # Vitest
 npm run generate-client       # after a change of the backend's API (the backend must be running)
 ```
+
+The schema is managed by [Alembic](https://alembic.sqlalchemy.org): read every generated migration before
+committing it (a renamed column comes out as a drop and an add), and add data changes to it by hand. A test applies
+the migrations to an empty database and fails when a model was changed without one.
 
 Both test suites fail below 100% coverage of lines and branches. The backend tests run against a real
 PostgreSQL (`127.0.0.1:5432`, database `test_db`, user `test_user` / `test_password`, schema `test_schema`) -

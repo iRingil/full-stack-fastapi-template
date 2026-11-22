@@ -1,9 +1,12 @@
-"""Module for creating initial database schema and data."""
+"""
+Creates the initial data: the first superuser.
+
+The tables are created by the migrations (Alembic's upgrade command), which must run first.
+"""
 
 from asyncio import run
 
 from loguru import logger
-from sqlmodel import SQLModel
 
 from app.core.config import Settings, get_settings
 from app.core.constants import BASE_DIR
@@ -17,30 +20,17 @@ __all__: tuple[str, ...] = ("InitialDataGenerator",)
 
 
 class InitialDataGenerator:
-    """Handles the creation of initial database schema and data."""
+    """Creates the initial data of the database."""
 
     def __init__(self, db_manager: DatabaseManager, settings: Settings) -> None:
         """
         Initializes the initial data generator.
 
-        :param db_manager: The database manager to use for creating tables and sessions.
+        :param db_manager: The database manager to open sessions with.
         :param settings: The application settings object.
         """
         self._db_manager: DatabaseManager = db_manager
         self._settings: Settings = settings
-
-    async def create_tables(self) -> None:
-        """
-        Creates all database tables based on SQLModel metadata.
-
-        :return: None
-        """
-        logger.info("Creating tables...")
-        async with self._db_manager.engine.begin() as conn:
-            # PyCharm misreads run_sync's Concatenate signature (basedpyright checks it)
-            # noinspection PyTypeChecker
-            await conn.run_sync(fn=SQLModel.metadata.create_all)
-        logger.info("Tables created.")
 
     async def create_first_superuser(self) -> None:
         """
@@ -70,7 +60,6 @@ class InitialDataGenerator:
 
         :return: None
         """
-        await self.create_tables()
         await self.create_first_superuser()
 
 

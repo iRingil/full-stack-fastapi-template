@@ -1,5 +1,5 @@
 """
-Tests for src/app/initial_data.py: the tables and the first superuser in the test database.
+Tests for src/app/initial_data.py: the first superuser in the test database.
 
 The global logging setup is replaced by a recorder (it is tested in test_log_setup.py).
 """
@@ -82,12 +82,28 @@ def test_runs_as_a_script(monkeypatch: pytest.MonkeyPatch, settings: Settings) -
     """
     'python -m app.initial_data' runs main() in its own event loop.
 
-    A synchronous test: the script starts the event loop itself. Its tables are dropped afterward.
+    A synchronous test: the script starts the event loop itself. The tables are created first, as the migrations
+    would do, and dropped afterward.
 
     :param monkeypatch: pytest's monkeypatch fixture.
     :param settings: The test settings.
     :return: None
     """
+
+    async def create_tables() -> None:
+        """
+        Creates the tables, as Alembic's upgrade command does before the script runs.
+
+        :return: None
+        """
+        creator: DatabaseManager = DatabaseManager(settings=settings)
+        async with creator.engine.begin() as conn:
+            # PyCharm misreads run_sync's Concatenate signature (basedpyright checks it)
+            # noinspection PyTypeChecker
+            await conn.run_sync(SQLModel.metadata.create_all)
+        await creator.close_database_connection()
+
+    asyncio.run(create_tables())
     script_db_manager: DatabaseManager = DatabaseManager(settings=settings)
     monkeypatch.setattr(target=log_setup, name="LoggingManager", value=lambda **_: None)
     monkeypatch.setattr(target=db, name="get_db_manager", value=lambda: script_db_manager)
@@ -97,7 +113,7 @@ def test_runs_as_a_script(monkeypatch: pytest.MonkeyPatch, settings: Settings) -
 
     async def check_and_clean() -> int:
         """
-        Counts the users the script created and drops its tables.
+        Counts the users the script created and drops the tables.
 
         :return: The number of users.
         """

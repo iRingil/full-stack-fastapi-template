@@ -3,7 +3,7 @@
 # Before the first start (as the user `app`):
 #   cd /opt/app/backend && python3.13 -m venv .venv && .venv/bin/pip install -r src/requirements.txt
 #   cp src/.env.example src/.env   # fill it in, with ENVIRONMENT=production
-#   cd src && ../.venv/bin/python -m app.initial_data
+#   cd src && ../.venv/bin/alembic upgrade head && ../.venv/bin/python -m app.initial_data
 # The application log goes to /opt/app/backend/src/logs/<project name>.log (rotated by
 # infrastructure/logrotate/app); stdout and stderr go to the journal: `journalctl -u app-backend`.
 
@@ -28,6 +28,8 @@ PrivateTmp=true
 # The code writes its log next to itself (backend/src/logs); "+" creates the folder outside the sandbox
 ExecStartPre=+/usr/bin/install -d -o app -g app /opt/app/backend/src/logs
 ReadWritePaths=-/opt/app/backend/src/logs
+# The database schema follows the code: every start applies the migrations that are new (none: nothing happens)
+ExecStartPre=/opt/app/backend/.venv/bin/alembic upgrade head
 
 # One process: the rate limiters count in the memory of a process, so with N workers a client would get N times
 # the limit. --proxy-headers takes the client address from X-Forwarded-For, trusted from 127.0.0.1 only.

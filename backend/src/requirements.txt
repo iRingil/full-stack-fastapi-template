@@ -1,5 +1,6 @@
 Jinja2==3.1.6
 SQLAlchemy[asyncio,postgresql-asyncpg]==2.1.9
+alembic==1.20.1
 bcrypt==5.0.0
 fastapi==0.165.0
 fastapi-mail==1.6.8
