@@ -2,7 +2,7 @@
 
 from collections.abc import AsyncGenerator
 from time import monotonic
-from typing import Annotated
+from typing import TYPE_CHECKING, Annotated
 from uuid import UUID
 
 import jwt
@@ -20,6 +20,9 @@ from app.crud.item import ItemCRUD
 from app.crud.user import UserCRUD
 from app.models import User
 
+if TYPE_CHECKING:
+    from starlette.datastructures import Address
+
 __all__: tuple[str, ...] = (
     "CurrentSuperuser",
     "CurrentUser",
@@ -28,6 +31,7 @@ __all__: tuple[str, ...] = (
     "ItemCrudDep",
     "OptionalCurrentUser",
     "ResendVerificationRateLimiter",
+    "ResendVerificationRateLimiterProvider",
     "SecurityManagerDep",
     "SessionDep",
     "SettingsDep",
@@ -209,7 +213,7 @@ class ResendVerificationRateLimiterProvider:
     Limits requests for a new verification email to one per interval per client IP.
 
     The state lives in the memory of one worker process: with several workers a client gets one request per worker.
-    Behind a reverse proxy, run uvicorn with --proxy-headers so that the client IP is not the proxy's.
+    Behind a reverse proxy, run Uvicorn with --proxy-headers so that the client IP is not the proxy's.
     """
 
     def __init__(self, interval_seconds: float = 60.0) -> None:
@@ -234,7 +238,8 @@ class ResendVerificationRateLimiterProvider:
         self._last_request_at = {
             ip: moment for ip, moment in self._last_request_at.items() if now - moment < self._interval_seconds
         }
-        ip_address: str = request.client.host if request.client else "unknown"
+        client: Address | None = request.client
+        ip_address: str = client.host if client else "unknown"
         if ip_address in self._last_request_at:
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,

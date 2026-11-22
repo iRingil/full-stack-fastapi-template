@@ -1,7 +1,7 @@
 """
 Tests for src/app/core/log_setup.py: the one-line log format, InterceptHandler and describe_exception.
 
-LoggingManager reconfigures loguru and the root logger of the process, so every test restores both afterwards.
+LoggingManager reconfigures loguru and the root logger of the process, so every test restores both afterward.
 The log files go to a temporary directory.
 """
 
@@ -23,8 +23,11 @@ from sqlalchemy.exc import DBAPIError, StatementError
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
+# noinspection PyProtectedMember
 from app.api.deps import _decode_user_id_from_token
 from app.core.config import Settings
+
+# noinspection PyProtectedMember
 from app.core.log_setup import InterceptHandler, LoggingManager, _patch_record, describe_exception
 from app.core.security import SecurityManager
 
@@ -81,7 +84,8 @@ def _line_with(lines: list[str], text_part: str) -> str:
 class Worker:
     """Code that logs, for the location checks: a class with methods."""
 
-    def log_with_loguru(self) -> None:
+    @staticmethod
+    def log_with_loguru() -> None:
         """
         Logs a message with loguru.
 
@@ -89,7 +93,8 @@ class Worker:
         """
         logger.info("from loguru")
 
-    def log_with_logging(self) -> None:
+    @staticmethod
+    def log_with_logging() -> None:
         """
         Logs a message with the standard logging, as a library would.
 
@@ -97,9 +102,10 @@ class Worker:
         """
         logging.getLogger("some.library").warning("from logging")
 
-    def log_a_failure(self) -> None:
+    @staticmethod
+    def log_a_failure() -> None:
         """
-        Logs a caught exception with the standard logging, as uvicorn does for a failed request.
+        Logs a caught exception with the standard logging, as Uvicorn does for a failed request.
 
         :return: None
         """
@@ -159,7 +165,7 @@ class TestLoggingManager:
 
     def test_an_exception_is_one_line_without_a_traceback(self, tmp_path: Path) -> None:
         """
-        A logged exception (here as uvicorn logs it) adds one line to the message and no traceback.
+        A logged exception (here as Uvicorn logs it) adds one line to the message and no traceback.
 
         :param tmp_path: A temporary directory.
         :return: None

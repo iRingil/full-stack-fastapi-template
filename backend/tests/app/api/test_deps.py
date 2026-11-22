@@ -16,6 +16,7 @@ from fastapi import HTTPException
 from httpx import AsyncClient, Response
 from starlette.requests import Request
 
+# noinspection PyProtectedMember
 from app.api.deps import ResendVerificationRateLimiterProvider, _decode_user_id_from_token
 from app.core.config import Settings
 from app.core.security import SecurityManager

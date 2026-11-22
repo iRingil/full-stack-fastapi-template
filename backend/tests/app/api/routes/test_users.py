@@ -52,8 +52,9 @@ class TestReadUsers:
         assert response.status_code == 200
         page: dict[str, object] = response.json()
         assert page["count"] == 3
-        assert isinstance(page["data"], list)
-        assert len(page["data"]) == 2
+        data: object = page["data"]
+        assert isinstance(data, list)
+        assert len(data) == 2
 
     async def test_regular_user_is_forbidden(
         self, client: AsyncClient, create_user: UserFactory, auth_headers: AuthHeaders

@@ -13,7 +13,7 @@ from app.core.security import get_security_manager
 from app.crud.user import UserCRUD
 from app.models import User, UserCreate
 
-__all__: tuple[str, ...] = ()
+__all__: tuple[str, ...] = ("InitialDataGenerator",)
 
 
 class InitialDataGenerator:
@@ -37,6 +37,8 @@ class InitialDataGenerator:
         """
         logger.info("Creating tables...")
         async with self._db_manager.engine.begin() as conn:
+            # PyCharm misreads run_sync's Concatenate signature (basedpyright checks it)
+            # noinspection PyTypeChecker
             await conn.run_sync(fn=SQLModel.metadata.create_all)
         logger.info("Tables created.")
 

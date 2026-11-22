@@ -61,7 +61,15 @@ from app.crud.item import ItemCRUD
 from app.crud.user import UserCRUD
 from app.models import Item, ItemCreate, User, UserCreate
 
-__all__: tuple[str, ...] = ()
+__all__: tuple[str, ...] = (
+    "USER_PASSWORD",
+    "AuthHeaders",
+    "ItemFactory",
+    "UserFactory",
+    "html_of",
+    "text_of",
+    "with_settings",
+)
 
 for _group in (AppSettings, SecuritySettings, SuperuserSettings, PostgresSettings, SmtpSettings, EmailSettings):
     _group.model_config["env_file"] = None
@@ -78,7 +86,7 @@ def with_settings(*, settings: Settings, group: str, **values: object) -> Settin
     A copy of the settings with some fields of one group replaced (without validation, as model_copy does).
 
     :param settings: The settings to copy.
-    :param group: The name of the group: app, security, superuser, postgres, smtp or email.
+    :param group: The name of the group: ``app``, ``security``, ``superuser``, ``postgres``, ``smtp`` or ``email``.
     :param values: The new field values of the group.
     :return: The copy.
     """
@@ -120,6 +128,7 @@ def security_manager_fixture(settings: Settings) -> SecurityManager:
     return SecurityManager(settings=settings)
 
 
+# noinspection PyProtectedMember
 @pytest.fixture(name="email_manager")
 def email_manager_fixture(settings: Settings, security_manager: SecurityManager) -> EmailManager:
     """
@@ -142,6 +151,7 @@ def email_manager_fixture(settings: Settings, security_manager: SecurityManager)
     return email_manager
 
 
+# noinspection PyProtectedMember
 @pytest.fixture(name="outbox")
 def outbox_fixture(email_manager: EmailManager) -> Iterator[list[EmailMessage]]:
     """
@@ -155,6 +165,8 @@ def outbox_fixture(email_manager: EmailManager) -> Iterator[list[EmailMessage]]:
         yield outbox
 
 
+# PyCharm misreads run_sync's Concatenate signature (basedpyright checks it)
+# noinspection PyTypeChecker
 @pytest.fixture(name="db_manager")
 async def db_manager_fixture(settings: Settings) -> AsyncIterator[DatabaseManager]:
     """
@@ -299,6 +311,7 @@ async def client_fixture(
     monkeypatch.setattr(target=app_factory, name="LoggingManager", value=lambda **_: None)
     limiter = ResendVerificationRateLimiter.dependency
     assert isinstance(limiter, ResendVerificationRateLimiterProvider)
+    # noinspection PyProtectedMember
     limiter._last_request_at.clear()
     application = AppFactory(settings=settings, db_manager=db_manager).app
     application.dependency_overrides[get_settings] = lambda: settings

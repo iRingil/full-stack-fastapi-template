@@ -90,7 +90,7 @@ class TestDbSessionMiddleware:
 
         async def receive() -> Message:
             """
-            The request has no body.
+            The request body is empty.
 
             :return: The request message.
             """

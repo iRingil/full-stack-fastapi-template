@@ -18,7 +18,7 @@ from app.core.log_setup import describe_exception
 if TYPE_CHECKING:
     from sqlmodel.ext.asyncio.session import AsyncSession
 
-__all__: tuple[str, ...] = ("MiddlewareConfigurator",)
+__all__: tuple[str, ...] = ("DbSessionMiddleware", "MiddlewareConfigurator")
 
 
 class DbSessionMiddleware(BaseHTTPMiddleware):
@@ -47,7 +47,7 @@ class DbSessionMiddleware(BaseHTTPMiddleware):
         session: AsyncSession = await anext(session_generator)
         try:
             response: Response = await call_next(request)
-        except Exception as exc:  # noqa: BLE001 - the last line of defence: log any error and answer 500
+        except Exception as exc:  # noqa: BLE001 - the last line of defense: log any error and answer 500
             logger.error(f"{request.method} {request.url.path} failed: {describe_exception(exc=exc)}")
             if request.scope.get("client"):
                 return Response(content="Internal Server Error", status_code=500)
@@ -73,6 +73,8 @@ class MiddlewareConfigurator:
         self._settings: Settings = settings
         self._db_manager: DatabaseManager = db_manager
 
+    # PyCharm misreads the ParamSpec of Starlette's middleware factories (basedpyright checks them)
+    # noinspection PyTypeChecker
     def add_all_middleware(self) -> None:
         """
         Adds all configured middleware to the application.

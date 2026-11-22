@@ -1,6 +1,6 @@
 """Generic, reusable CRUD (Create, Read, Update, Delete) base class."""
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 
 from pydantic import BaseModel
 from sqlalchemy import ColumnElement, tuple_
@@ -144,7 +144,7 @@ class BaseCRUD[
         return await self._execute_paginated_select(skip=skip, limit=limit)
 
     # Create
-    async def create(self, *, obj_in: CreateSchemaType, update: dict[str, object] | None = None) -> ModelType:
+    async def create(self, *, obj_in: CreateSchemaType, update: Mapping[str, object] | None = None) -> ModelType:
         """
         Creates a new object.
 
@@ -152,7 +152,7 @@ class BaseCRUD[
         :param update: Extra values that are not part of the schema (e.g., owner ID or password hash).
         :return: The created database object.
         """
-        db_obj: ModelType = self._model.model_validate(obj=obj_in, update=update)
+        db_obj: ModelType = self._model.model_validate(obj=obj_in, update=dict(update or {}))
         self._session.add(instance=db_obj)
         await self._session.commit()
         await self._session.refresh(instance=db_obj)
@@ -202,7 +202,7 @@ class BaseCRUD[
 
     # Update
     async def update(
-        self, *, db_obj: ModelType, obj_in: UpdateSchemaType, update: dict[str, object] | None = None
+        self, *, db_obj: ModelType, obj_in: UpdateSchemaType, update: Mapping[str, object] | None = None
     ) -> ModelType:
         """
         Partially updates an object: only the fields set in obj_in are changed.
@@ -212,7 +212,7 @@ class BaseCRUD[
         :param update: Extra values that are not part of the schema.
         :return: The updated database object.
         """
-        db_obj.sqlmodel_update(obj=obj_in.model_dump(exclude_unset=True), update=update)
+        db_obj.sqlmodel_update(obj=obj_in.model_dump(exclude_unset=True), update=dict(update or {}))
         self._session.add(instance=db_obj)
         await self._session.commit()
         await self._session.refresh(instance=db_obj)

@@ -1,5 +1,6 @@
 """Module for User CRUD operations for User model."""
 
+from collections.abc import Mapping
 from typing import override
 
 from pydantic import EmailStr
@@ -27,7 +28,7 @@ class UserCRUD(BaseCRUD[User, UserCreate, UserUpdate, UserPublic, UsersPublic]):
         self._security: SecurityManager = security_manager or get_security_manager()
 
     @override
-    async def create(self, *, obj_in: UserCreate, update: dict[str, object] | None = None) -> User:
+    async def create(self, *, obj_in: UserCreate, update: Mapping[str, object] | None = None) -> User:
         """
         Creates a new user, hashing the password before saving.
 
@@ -39,7 +40,7 @@ class UserCRUD(BaseCRUD[User, UserCreate, UserUpdate, UserPublic, UsersPublic]):
         return await super().create(obj_in=obj_in, update={**(update or {}), "hashed_password": hashed_password})
 
     @override
-    async def update(self, *, db_obj: User, obj_in: UserUpdate, update: dict[str, object] | None = None) -> User:
+    async def update(self, *, db_obj: User, obj_in: UserUpdate, update: Mapping[str, object] | None = None) -> User:
         """
         Updates an existing user; a new password is hashed before saving.
 

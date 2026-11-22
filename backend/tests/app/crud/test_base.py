@@ -2,7 +2,7 @@
 Tests for src/app/crud/base.py (BaseCRUD) against the test database.
 
 The generic methods are exercised on a table of the tests' own, test_tag, with a composite primary key: User and
-Item have single keys, and their create schemas do not map to columns one-to-one (bulk inserts need that).
+Item have single keys, and their Create schemas do not map to columns one-to-one (bulk inserts need that).
 The table is part of SQLModel.metadata, so the db_manager fixture creates and drops it with the others.
 """
 
@@ -47,7 +47,7 @@ class TagUpdate(SQLModel):
 class Tag(TagCreate, table=True):
     """A table of the tests: a composite primary key and a plain field."""
 
-    __tablename__: str = "test_tag"  # pyright: ignore[reportIncompatibleVariableOverride] - SQLModel declares it as a declared_attr
+    __tablename__: ClassVar[str] = "test_tag"  # pyright: ignore[reportIncompatibleVariableOverride] - SQLModel declares it as a declared_attr
 
 
 class TagPublic(BaseModel):
@@ -96,7 +96,7 @@ def _tags(*names: str, group: str = "g") -> list[TagCreate]:
 
     :param names: The names of the tags.
     :param group: The group of the tags.
-    :return: The create schemas.
+    :return: The TagCreate schemas.
     """
     return [TagCreate(group=group, name=name, label=name.upper()) for name in names]
 
@@ -267,7 +267,11 @@ class TestDelete:
         :return: None
         """
         await tag_crud.create_multi(objs_in=_tags("a", "b", "c"))
-        tags: list[Tag] = [tag for name in ("a", "c") if (tag := await tag_crud.get_by_id(obj_id=("g", name)))]
+        first: Tag | None = await tag_crud.get_by_id(obj_id=("g", "a"))
+        last: Tag | None = await tag_crud.get_by_id(obj_id=("g", "c"))
+        assert first is not None
+        assert last is not None
+        tags: list[Tag] = [first, last]
         deleted: list[TagPublic] = await tag_crud.delete_multi(objs_in=tags)
         assert [tag.name for tag in deleted] == ["a", "c"]
         assert [tag.name for tag in (await tag_crud.get_multi()).data] == ["b"]

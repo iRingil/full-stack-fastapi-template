@@ -90,8 +90,9 @@ def _patch_record(record: "Record") -> None:
         frame = frame.f_back
     record["extra"]["qualname"] = qualname
     exception = record["exception"]
-    if exception and exception.value:
-        record["message"] = f"{record['message']}: {describe_exception(exc=exception.value)}"
+    error: BaseException | None = exception.value if exception else None
+    if error:
+        record["message"] = f"{record['message']}: {describe_exception(exc=error)}"
     # Never a traceback: the exception is in the message now
     record["exception"] = None
 

@@ -1,4 +1,4 @@
-# This file is the default config for uvicorn's logging, which is used by the server.
+# This file is the default config for Uvicorn's logging, which is used by the server.
 
 version: 1
 disable_existing_loggers: False
@@ -30,7 +30,7 @@ loggers:
     handlers: [intercept]
     level: INFO
     propagate: no
-  # The same for gunicorn when it runs uvicorn workers on a server
+  # The same for Gunicorn when it runs Uvicorn workers on a server
   gunicorn:
     handlers: [intercept]
     level: INFO

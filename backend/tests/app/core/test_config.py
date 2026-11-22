@@ -11,6 +11,7 @@ from pathlib import Path
 import pytest
 from pydantic import AnyHttpUrl, HttpUrl, SecretStr, ValidationError
 
+# noinspection PyProtectedMember
 from app.core.config import (
     AppSettings,
     PostgresSettings,
@@ -182,6 +183,8 @@ class TestPostgresSettings:
         env_file.write_text("POSTGRES_SERVER=db.example.com\nPOSTGRES_PORT=6432\n", encoding="utf-8")
         monkeypatch.delenv(name="POSTGRES_SERVER")
         monkeypatch.delenv(name="POSTGRES_PORT")
+        # PyCharm does not take a TypedDict for a Mapping (basedpyright checks it)
+        # noinspection PyTypeChecker
         monkeypatch.setitem(PostgresSettings.model_config, "env_file", env_file)
         postgres: PostgresSettings = _load(cls=PostgresSettings)
         assert (postgres.server, postgres.port) == ("db.example.com", 6432)

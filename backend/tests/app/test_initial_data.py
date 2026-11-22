@@ -9,7 +9,6 @@ The global logging setup is replaced by a recorder (it is tested in test_log_set
 import asyncio
 import runpy
 import sys
-from pathlib import Path
 
 import pytest
 from sqlmodel import SQLModel, func, select
@@ -19,6 +18,7 @@ import app.core.db as db  # noqa: PLR0402 - for basedpyright 'from app import' m
 import app.core.log_setup as log_setup  # noqa: PLR0402 - for basedpyright 'from app import' means the tests' own app package
 import app.initial_data as initial_data  # noqa: PLR0402 - for basedpyright 'from app import' means the tests' own app package
 from app.core.config import Settings
+from app.core.constants import BASE_DIR
 from app.core.db import DatabaseManager
 from app.crud.user import UserCRUD
 from app.initial_data import InitialDataGenerator
@@ -73,9 +73,7 @@ async def test_main_uses_the_global_settings(monkeypatch: pytest.MonkeyPatch, db
     monkeypatch.setattr(target=initial_data, name="LoggingManager", value=lambda **kwargs: calls.append(kwargs))
     monkeypatch.setattr(target=initial_data, name="get_db_manager", value=lambda: db_manager)
     await initial_data.main()
-    assert calls == [
-        {"debug": True, "log_dir": Path(initial_data.__file__).parents[1] / "logs", "project_name": "Test Project"}
-    ]
+    assert calls == [{"debug": True, "log_dir": BASE_DIR / "logs", "project_name": "Test Project"}]
     async for session in db_manager.get_session():
         assert (await session.exec(statement=select(func.count()).select_from(User))).one() == 1
 
@@ -84,7 +82,7 @@ def test_runs_as_a_script(monkeypatch: pytest.MonkeyPatch, settings: Settings) -
     """
     'python -m app.initial_data' runs main() in its own event loop.
 
-    A synchronous test: the script starts the event loop itself. Its tables are dropped afterwards.
+    A synchronous test: the script starts the event loop itself. Its tables are dropped afterward.
 
     :param monkeypatch: pytest's monkeypatch fixture.
     :param settings: The test settings.
@@ -108,6 +106,8 @@ def test_runs_as_a_script(monkeypatch: pytest.MonkeyPatch, settings: Settings) -
         async for session in cleaner.get_session():
             users = (await session.exec(statement=select(func.count()).select_from(User))).one()
         async with cleaner.engine.begin() as conn:
+            # PyCharm misreads run_sync's Concatenate signature (basedpyright checks it)
+            # noinspection PyTypeChecker
             await conn.run_sync(SQLModel.metadata.drop_all)
         await cleaner.close_database_connection()
         return users
