@@ -25,6 +25,7 @@ This project implements several key patterns that define its structure:
 
 ### Frontend
 
+-   **Server-Side Proxy:** The browser talks only to the Next.js server, which proxies the API and keeps the session token in an httpOnly cookie.
 -   **Component-Driven Architecture:** The UI is built using a feature-based structure. A clear distinction is made between reusable UI primitives (`/components/ui`) and feature-specific components (`/components`).
 -   **Centralized State Management:** Server state is exclusively managed by **TanStack Query**, which acts as a single source of truth for all API data, handling caching, refetching, and synchronization.
 -   **The "Action-Dialog" Pattern:** A standardized pattern for components that trigger actions in a dialog (e.g., Edit, Delete), separating the `Trigger` from the `Dialog` to ensure a clean, unidirectional data flow.
@@ -35,13 +36,14 @@ This project implements several key patterns that define its structure:
     -   🧰 [**SQLModel**](https://sqlmodel.tiangolo.com) for Python SQL database interactions (ORM).
     -   🔍 [**Pydantic**](https://docs.pydantic.dev) for data validation and settings management.
     -   💾 [**PostgreSQL**](https://www.postgresql.org) as the SQL database.
--   🚀 [**React**](https://react.dev) for the frontend.
+-   🚀 [**Next.js**](https://nextjs.org) (React 19) for the frontend: server-rendered, crawlable public pages.
     -   ✨ **TypeScript** for robust type safety.
-    -   ⚛️ [**TanStack Query**](https://tanstack.com/query) & [**TanStack Router**](https://tanstack.com/router) for state management and routing.
-    -   🎨 [**Chakra UI**](https://chakra-ui.com) for the component library.
+    -   ⚛️ [**TanStack Query**](https://tanstack.com/query) for server state.
+    -   🎨 [**HeroUI**](https://heroui.com) and [**Tailwind CSS**](https://tailwindcss.com) for the components and styling.
+    -   🌐 [**next-intl**](https://next-intl.dev) for English and Russian.
     -   🤖 An automatically generated API client via [**openapi-ts**](https://github.com/hey-api/openapi-ts).
     -   🦇 Dark mode support.
--   🔑 JWT (JSON Web Token) authentication with email-based password recovery.
+-   🔑 JWT authentication kept in an httpOnly cookie, with email confirmation and password recovery.
 -   ✅ Unit tests with [**Pytest**](https://pytest.org) and [**Vitest**](https://vitest.dev).
 
 ## Screenshots

@@ -1,50 +1,52 @@
 /**
- * @file Defines the delete account page component.
- * @description Provides the UI for initiating account deletion, including a confirmation component.
- * Renders a heading, description, and the DeleteConfirmation component.
- * @module DeleteAccount
+ * @file Settings tab "Danger zone": deletes the account and everything it owns, then logs out.
  */
 
-import { Container, Heading, Text } from "@chakra-ui/react"
-import type { FC, ReactElement } from "react"
+"use client"
 
-import DeleteConfirmation from "./DeleteConfirmation"
-
-// region Type Aliases
+import { Button } from "@heroui/react"
+import { useMutation } from "@tanstack/react-query"
+import { useTranslations } from "next-intl"
+import { type ReactNode, useState } from "react"
+import { deleteUserMeMutation } from "@/client/@tanstack/react-query.gen"
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog"
+import { useAuth } from "@/hooks/useAuth"
+import { useNotify } from "@/hooks/useNotify"
 
 /**
- * Type alias for the DeleteAccount component.
- * @type {DeleteAccountComponent}
+ * Renders the warning, the button and the confirmation dialog.
+ * @returns The tab content.
  */
-type DeleteAccountComponent = FC
+export function DeleteAccount(): ReactNode {
+  const t = useTranslations("Settings")
+  const notify = useNotify()
+  const { logout } = useAuth()
+  const [isConfirmOpen, setConfirmOpen] = useState<boolean>(false)
+  const deleteMe = useMutation({
+    ...deleteUserMeMutation(),
+    onSuccess: async (): Promise<void> => {
+      notify.success(t("accountDeleted"))
+      await logout()
+    },
+    onError: notify.error,
+  })
 
-// endregion
-
-// region Main Code
-
-/**
- * Main component for the delete account page.
- * @description Renders a container with a heading, description, and the DeleteConfirmation component.
- * @returns {ReactElement} The rendered delete account component.
- */
-const DeleteAccount: DeleteAccountComponent = (): ReactElement => {
   return (
-    <Container maxW="full">
-      <Heading size="sm" py={4}>
-        Delete Account
-      </Heading>
-      <Text>Permanently delete your data and everything associated with your account.</Text>
-      <DeleteConfirmation />
-    </Container>
+    <div className="flex max-w-md flex-col items-start gap-4">
+      <p className="text-muted">{t("deleteAccountDescription")}</p>
+      <Button variant="danger" onPress={(): void => setConfirmOpen(true)}>
+        {t("deleteAccount")}
+      </Button>
+      <ConfirmDialog
+        isOpen={isConfirmOpen}
+        onClose={(): void => setConfirmOpen(false)}
+        title={t("deleteAccountTitle")}
+        confirmLabel={t("deleteAccount")}
+        isPending={deleteMe.isPending}
+        onConfirm={(): void => deleteMe.mutate({})}
+      >
+        {t("deleteAccountConfirm")}
+      </ConfirmDialog>
+    </div>
   )
 }
-
-// endregion
-
-// region Optional Declarations
-
-DeleteAccount.displayName = "DeleteAccount"
-
-// endregion
-
-export default DeleteAccount

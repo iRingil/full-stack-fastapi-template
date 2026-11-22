@@ -1,45 +1,26 @@
 /**
- * @file Configuration for the openapi-ts client generator.
- * This file defines how the TypeScript client is generated from the openapi.json schema.
- * It specifies input/output paths, the client library to use, and customizes method naming.
+ * @file Configuration of the API client generator (`npm run generate-client`).
+ * @description Reads the OpenAPI schema of the running backend (`API_URL`, default http://127.0.0.1:8000) and
+ * writes a fetch client, SDK functions and TanStack Query options into `src/client`.
  */
 
 import { defineConfig } from "@hey-api/openapi-ts"
-// @ts-ignore
-import type { IOperationObject, Operation } from "@hey-api/openapi-ts"
 
-/**
- * @file Configuration for the openapi-ts client generator.
- * This file defines how the TypeScript client is generated from the openapi.json schema.
- */
-// noinspection JSUnusedGlobalSymbols
+const apiUrl: string = process.env.API_URL ?? "http://127.0.0.1:8000"
+
 export default defineConfig({
-  client: "legacy/axios",
-  input: "./openapi.json",
-  output: "./src/client",
-  // exportSchemas: true,
-  plugins: [
-    {
-      name: "@hey-api/sdk",
-      // NOTE: this doesn't allow tree-shaking
-      asClass: false,
-      operationId: true,
-
-      /**
-       * Builds a clean method name for an API operation.
-       * It removes the service prefix and converts the name to camelCase.
-       * For example, "Users-read_user_me" becomes "readUserMe".
-       * @param operation The operation object from the OpenAPI schema.
-       * @returns The formatted, camel-cased method name.
-       */
-      methodNameBuilder: (operation: IOperationObject | Operation): string => {
-        let name: string = operation.name
-        const service: string = operation.service
-        if (service && name.toLowerCase().startsWith(service.toLowerCase())) {
-          name = name.slice(service.length)
-        }
-        return name.charAt(0).toLowerCase() + name.slice(1)
+  input: `${apiUrl}/api/v1/openapi.json`,
+  parser: {
+    // The private router exists only for local seeding, the frontend never calls it
+    filters: { tags: { exclude: ["private"] } },
+    // Operation IDs are "{tag}-{Router}.{route}" (AppFactory._custom_generate_unique_id): keep only the route name,
+    // so "users-UsersRouter.read_users" becomes readUsers
+    patch: {
+      operations: (_method: string, _path: string, operation: { operationId?: string }): void => {
+        operation.operationId = operation.operationId?.split(".").at(-1)
       },
     },
-  ],
+  },
+  output: { path: "./src/client", postProcess: ["biome:format"] },
+  plugins: ["@hey-api/client-fetch", "@hey-api/typescript", "@hey-api/sdk", "@tanstack/react-query"],
 })

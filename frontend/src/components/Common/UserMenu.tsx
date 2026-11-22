@@ -1,82 +1,70 @@
 /**
- * @file Defines the UserMenu component for user navigation.
- * @description Renders a dropdown menu for user profile and logout actions.
- * @module UserMenu
+ * @file The user's menu in the header: who is logged in, a link to the settings and logout.
  */
 
 "use client"
 
-import { Box, Button, Flex, Text } from "@chakra-ui/react"
-import { Link } from "@tanstack/react-router"
-import type React from "react"
-import type { FC } from "react"
-import { FaUserAstronaut } from "react-icons/fa"
+import { Avatar, Button, Dropdown, Label } from "@heroui/react"
+import { useTranslations } from "next-intl"
+import type { Key, ReactNode } from "react"
 import { FiLogOut, FiUser } from "react-icons/fi"
-
-import useAuth from "@/hooks/useAuth"
-import { MenuContent, MenuItem, MenuRoot, MenuTrigger } from "../ui/menu"
-
-// region Type Aliases
+import { useAuth, useCurrentUser } from "@/hooks/useAuth"
+import { useRouter } from "@/i18n/navigation"
 
 /**
- * Props for the UserMenu component.
- * @interface UserMenuProps
+ * Builds the avatar initials from the name, or from the email when there is no name.
+ * @param name - The full name, if any.
+ * @param email - The email.
+ * @returns One or two capital letters.
  */
-type UserMenuProps = Record<string, never>
-
-// endregion
-
-// region Main Code
+export function initials(name: string | null | undefined, email: string): string {
+  const words: string[] = (name ?? "").trim().split(/\s+/).filter(Boolean)
+  const letters: string =
+    words.length > 0 ? words.map((word: string): string => word.charAt(0)).join("") : email.charAt(0)
+  return letters.slice(0, 2).toUpperCase()
+}
 
 /**
- * UserMenu component for rendering user dropdown menu.
- * @returns {React.ReactElement} The rendered UserMenu component.
+ * Renders the menu (nothing until the user is loaded).
+ * @returns The menu.
  */
-const UserMenu: FC<UserMenuProps> = (): React.ReactElement => {
-  const { user, logout } = useAuth()
+export function UserMenu(): ReactNode {
+  const t = useTranslations("Nav")
+  const { data: user } = useCurrentUser()
+  const { logout } = useAuth()
+  const router = useRouter()
+  if (!user) {
+    return null
+  }
 
-  /**
-   * Handles user logout action.
-   * @returns {Promise<void>} A promise that resolves when logout is complete.
-   */
-  const handleLogout = async (): Promise<void> => {
-    logout()
+  const onAction = (key: Key): void => {
+    if (key === "settings") {
+      router.push("/settings")
+    } else if (key === "logout") {
+      void logout()
+    }
   }
 
   return (
-    <Flex>
-      <MenuRoot>
-        <MenuTrigger asChild p={2}>
-          <Button data-testid="user-menu" variant="solid" maxW="sm" truncate>
-            <FaUserAstronaut fontSize="18" />
-            <Text>{user?.full_name || "User"}</Text>
-          </Button>
-        </MenuTrigger>
-
-        <MenuContent>
-          <Link to="/settings">
-            <MenuItem value="user-settings" gap={2} py={2} mb={1} style={{ cursor: "pointer" }}>
-              <FiUser fontSize="18px" />
-              <Box flex="1">My Profile</Box>
-            </MenuItem>
-          </Link>
-
-          <MenuItem value="logout" gap={2} py={2} onClick={handleLogout} style={{ cursor: "pointer" }}>
-            <FiLogOut />
-            Log Out
-          </MenuItem>
-        </MenuContent>
-      </MenuRoot>
-    </Flex>
+    <Dropdown>
+      <Button variant="ghost" size="sm" aria-label={t("userMenu")} className="gap-2 ps-1">
+        <Avatar size="sm">
+          <Avatar.Fallback>{initials(user.full_name, user.email)}</Avatar.Fallback>
+        </Avatar>
+        <span className="hidden max-w-40 truncate sm:inline">{user.full_name || user.email}</span>
+      </Button>
+      <Dropdown.Popover placement="bottom end">
+        <Dropdown.Menu aria-label={t("userMenu")} onAction={onAction}>
+          <Dropdown.Item id="settings" textValue={t("profile")}>
+            <FiUser aria-hidden />
+            <Label>{t("profile")}</Label>
+          </Dropdown.Item>
+          <Dropdown.Item id="logout" textValue={t("logout")} variant="danger">
+            <FiLogOut aria-hidden />
+            <Label>{t("logout")}</Label>
+          </Dropdown.Item>
+        </Dropdown.Menu>
+      </Dropdown.Popover>
+    </Dropdown>
   )
 }
-
-// endregion
-
-// region Optional Declarations
-
-UserMenu.displayName = "UserMenu"
-
-// endregion
-
-export default UserMenu

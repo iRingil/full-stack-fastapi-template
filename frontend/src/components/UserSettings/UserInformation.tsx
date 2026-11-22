@@ -1,191 +1,76 @@
 /**
- * @file Defines the user information page component.
- * @description Provides the UI and logic for displaying and editing the current user's information (full name and email).
- * Handles form submission with validation and updates user data via API.
- * @module UserInformation
+ * @file Settings tab "My profile": the user's name and email.
  */
 
-import { Box, Button, Container, Flex, Heading, Input, Text } from "@chakra-ui/react"
-import { type QueryClient, type UseMutationResult, useMutation, useQueryClient } from "@tanstack/react-query"
-import { useState } from "react"
-import type { FC, ReactElement } from "react"
-import type { SubmitHandler } from "react-hook-form"
+"use client"
+
+import { Button } from "@heroui/react"
+import { zodResolver } from "@hookform/resolvers/zod"
+import { type QueryClient, useMutation, useQueryClient } from "@tanstack/react-query"
+import { useTranslations } from "next-intl"
+import { type ReactNode, useEffect } from "react"
 import { useForm } from "react-hook-form"
-
-import {
-  type ApiError,
-  type CancelablePromise,
-  type UserPublic,
-  type UserUpdateMe,
-  usersUsersRouterUpdateUserMe,
-} from "@/client"
-import useAuth from "@/hooks/useAuth"
-import useCustomToast from "@/hooks/useCustomToast"
-import { emailPattern, namePattern } from "@/utils"
-import { Field } from "../ui/field"
-
-// region Type Aliases
+import { readUserMeQueryKey, updateUserMeMutation } from "@/client/@tanstack/react-query.gen"
+import { FormTextField } from "@/components/ui/FormTextField"
+import { useCurrentUser } from "@/hooks/useAuth"
+import { useNotify } from "@/hooks/useNotify"
+import { emptyToNull, profileSchema } from "@/lib/validation"
 
 /**
- * Type alias for the user information form data.
- * @type {UserInformationForm}
+ * Renders the profile form.
+ * @returns The form.
  */
-type UserInformationForm = UserPublic
-
-/**
- * Type alias for the UserInformation component.
- * @type {UserInformationComponent}
- */
-type UserInformationComponent = FC
-
-// endregion
-
-// region Main Code
-
-/**
- * Main component for the user information page.
- * @description Renders a form for viewing or editing the user's full name and email with client-side validation.
- * Toggles between view and edit modes, submits updates via API, and updates query cache.
- * @returns {ReactElement} The rendered user information component.
- */
-const UserInformation: UserInformationComponent = (): ReactElement => {
+export function UserInformation(): ReactNode {
+  const t = useTranslations("Settings")
+  const tc = useTranslations("Common")
+  const tv = useTranslations("Validation")
+  const notify = useNotify()
   const queryClient: QueryClient = useQueryClient()
-  const { showSuccessToast, showApiErrorToast } = useCustomToast()
-  const { user: currentUser } = useAuth()
-  const [editMode, setEditMode] = useState<boolean>(false)
+  const { data: user } = useCurrentUser()
+  const updateMe = useMutation({
+    ...updateUserMeMutation(),
+    onSuccess: (updated): void => {
+      queryClient.setQueryData(readUserMeQueryKey(), updated)
+      notify.success(t("profileSaved"))
+    },
+    onError: notify.error,
+  })
   const {
-    register,
+    control,
     handleSubmit,
     reset,
-    formState: { isSubmitting, errors, isDirty },
-  } = useForm<UserInformationForm>({
-    mode: "onBlur",
-    criteriaMode: "all",
-    defaultValues: { full_name: currentUser?.full_name, email: currentUser?.email },
-  })
+    formState: { isDirty, isSubmitting },
+  } = useForm({ resolver: zodResolver(profileSchema(tv)), defaultValues: { fullName: "", email: "" } })
 
-  /**
-   * Mutation for handling user information update.
-   * @type {UseMutationResult<UserPublic, ApiError, UserUpdateMe>}
-   */
-  const mutation: UseMutationResult<UserPublic, ApiError, UserUpdateMe> = useMutation({
-    mutationFn: (data: UserUpdateMe): CancelablePromise<UserPublic> =>
-      usersUsersRouterUpdateUserMe({ requestBody: data }),
-    onSuccess: (updatedUser: UserPublic): void => {
-      showSuccessToast("User updated successfully.")
-      queryClient.setQueryData(["currentUser"], updatedUser)
-      void queryClient.invalidateQueries({ queryKey: ["currentUser"] })
-      setEditMode(false)
-      reset(updatedUser)
-    },
-    onError: (err: ApiError): void => {
-      showApiErrorToast(err)
-    },
-  })
+  useEffect((): void => {
+    if (user) {
+      reset({ fullName: user.full_name ?? "", email: user.email })
+    }
+  }, [user, reset])
 
-  /**
-   * Handles the form submission event.
-   * @param {UserInformationForm} data - The validated form data.
-   * @returns {void}
-   */
-  const onSubmit: SubmitHandler<UserInformationForm> = (data: UserInformationForm): void => {
-    mutation.mutate(data)
-  }
+  const onSubmit = handleSubmit(async (values): Promise<void> => {
+    try {
+      await updateMe.mutateAsync({ body: { full_name: emptyToNull(values.fullName), email: values.email } })
+    } catch {
+      // Shown by the toast; the form keeps the entered values
+    }
+  })
 
   return (
-    <Container maxW="full">
-      <Heading size="sm" py={4}>
-        User Information
-      </Heading>
-      <Box w={{ sm: "full", md: "sm" }} as="form" onSubmit={handleSubmit(onSubmit)}>
-        {editMode ? (
-          <Field id="full_name" label="Full name" invalid={!!errors.full_name} errorText={errors.full_name?.message}>
-            <Input
-              id="full_name"
-              {...register("full_name", {
-                required: "Full name is required",
-                pattern: namePattern,
-              })}
-              type="text"
-              size="md"
-              autoComplete="on"
-            />
-          </Field>
-        ) : (
-          <Box>
-            <Text fontWeight="bold" fontSize="sm">
-              Full name
-            </Text>
-            <Text fontSize="md" py={2} color={!currentUser?.full_name ? "gray" : "inherit"} truncate maxW="sm">
-              {currentUser?.full_name || "N/A"}
-            </Text>
-          </Box>
-        )}
-        <Box mt={4}>
-          {editMode ? (
-            <Field id="email" label="Email" invalid={!!errors.email} errorText={errors.email?.message}>
-              <Input
-                id="email"
-                {...register("email", {
-                  required: "Email is required",
-                  pattern: emailPattern,
-                })}
-                type="email"
-                size="md"
-                autoComplete="on"
-              />
-            </Field>
-          ) : (
-            <Box>
-              <Text fontWeight="bold" fontSize="sm">
-                Email
-              </Text>
-              <Text fontSize="md" py={2} truncate maxW="sm">
-                {currentUser?.email}
-              </Text>
-            </Box>
-          )}
-        </Box>
-        <Flex mt={4} gap={3}>
-          {editMode ? (
-            <>
-              <Button
-                variant="solid"
-                type="submit"
-                loading={isSubmitting || mutation.isPending}
-                disabled={!isDirty || mutation.isPending}
-              >
-                Save
-              </Button>
-              <Button
-                variant="subtle"
-                colorPalette="gray"
-                type="button"
-                onClick={(): void => {
-                  reset({ full_name: "", email: "" })
-                  setEditMode(false)
-                }}
-              >
-                Cancel
-              </Button>
-            </>
-          ) : (
-            <Button variant="solid" type="button" onClick={(): void => setEditMode(true)}>
-              Edit
-            </Button>
-          )}
-        </Flex>
-      </Box>
-    </Container>
+    <form noValidate onSubmit={onSubmit} className="flex max-w-md flex-col gap-4">
+      <FormTextField control={control} name="fullName" label={tc("fullName")} autoComplete="name" />
+      <FormTextField
+        control={control}
+        name="email"
+        type="email"
+        label={tc("email")}
+        autoComplete="email"
+        isRequired
+        description={t("emailHint")}
+      />
+      <Button type="submit" className="self-start" isPending={isSubmitting} isDisabled={!isDirty}>
+        {tc("save")}
+      </Button>
+    </form>
   )
 }
-
-// endregion
-
-// region Optional Declarations
-
-UserInformation.displayName = "UserInformation"
-
-// endregion
-
-export default UserInformation

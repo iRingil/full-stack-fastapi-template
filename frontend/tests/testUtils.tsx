@@ -1,40 +1,61 @@
 /**
- * @file Test utilities for rendering components with necessary providers.
- * @description This file exports a custom `render` function that automatically wraps
- * components in the application's `CustomProvider`, ensuring a consistent
- * test environment.
+ * @file Rendering helpers: components get the English messages and a fresh query client.
+ * @description `@/i18n/navigation` and `next/navigation` are mocked for all tests (`setupTests.tsx`): the router
+ * records calls in {@link router}, the path and query come from {@link navigation}.
  */
 
-import type { RenderOptions, RenderResult } from "@testing-library/react"
-import { render as testingLibraryRender } from "@testing-library/react"
+import { Toast } from "@heroui/react"
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
+import { render } from "@testing-library/react"
+import { NextIntlClientProvider } from "next-intl"
 import type { ReactElement, ReactNode } from "react"
-
-import { CustomProvider } from "@/components/ui/provider"
+import { vi } from "vitest"
+import messages from "../messages/en.json"
 
 /**
- * An internal component that wraps children in all necessary application providers.
- *
- * @param {object} props - The component props.
- * @param {ReactNode} props.children - The React elements to be wrapped.
- * @returns {ReactElement} The children wrapped in `CustomProvider`.
+ * Renders a component inside the app's i18n and query providers, with the toast region.
+ * @param ui - The component.
+ * @param queryClient - The query client; a new one without retries by default.
+ * @returns Testing Library's result plus the query client.
  */
-const AllTheProviders = ({ children }: { children: ReactNode }): ReactElement => {
-  return <CustomProvider>{children}</CustomProvider>
+export function renderWithProviders(
+  ui: ReactElement,
+  queryClient: QueryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  }),
+): ReturnType<typeof render> & { queryClient: QueryClient } {
+  const wrapper = ({ children }: { children: ReactNode }): ReactNode => (
+    <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
+      <QueryClientProvider client={queryClient}>
+        {children}
+        <Toast.Provider />
+      </QueryClientProvider>
+    </NextIntlClientProvider>
+  )
+  return Object.assign(render(ui, { wrapper }), { queryClient })
+}
+
+/** Spies of the mocked locale-aware router (`@/i18n/navigation`, mocked in `setupTests.tsx`); reset after each test. */
+export const router = { push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }
+
+/** State of the mocked navigation: set the path and the query string a test needs. */
+export const navigation = { pathname: "/", searchParams: new URLSearchParams() }
+
+/**
+ * Builds a JSON response like the backend's.
+ * @param body - The body.
+ * @param status - The HTTP status.
+ * @returns The response.
+ */
+export function jsonResponse(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } })
 }
 
 /**
- * A custom render function that wraps a UI component with application providers.
- * This ensures components are tested in a realistic, consistent environment.
- *
- * @param {ReactElement} ui - The React element to render.
- * @param {Omit<RenderOptions, "wrapper">} [options] - Optional configuration for the render, excluding the `wrapper` property.
- * @returns {RenderResult} The result of rendering the UI, providing access to query functions.
+ * Builds a JWT-shaped token with the given payload (the signature is irrelevant here).
+ * @param payload - The claims.
+ * @returns The token.
  */
-const customRender = (ui: ReactElement, options?: Omit<RenderOptions, "wrapper">): RenderResult =>
-  testingLibraryRender(ui, { wrapper: AllTheProviders, ...options })
-
-// Re-export all of `@testing-library/react` for convenience in test files.
-export * from "@testing-library/react"
-// Override the original `render` with our custom one.
-// noinspection JSUnusedGlobalSymbols
-export { customRender as render }
+export function fakeJwt(payload: object): string {
+  return `header.${Buffer.from(JSON.stringify(payload)).toString("base64url")}.signature`
+}

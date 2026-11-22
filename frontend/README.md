@@ -2,101 +2,87 @@
 
 > **Note:** This project is an architectural refactoring of the original project [fastapi/full-stack-fastapi-template](https://github.com/fastapi/full-stack-fastapi-template).
 
-The goal of this refactoring is to establish clean, scalable, and maintainable architectural patterns for a modern Single-Page Application (SPA) using React, TypeScript, and the TanStack ecosystem.
+The frontend is a [Next.js](https://nextjs.org) application (App Router, React 19 with the React Compiler) that serves both the public, search-engine-friendly pages and the logged-in area (dashboard, items, user administration, settings).
 
-## Key Architectural Decisions
+## Stack
 
-The frontend codebase has been significantly restructured to follow modern best practices for component design, state management, and data fetching.
+- **Next.js 16** — server-rendered, statically generated pages; a built-in proxy to the backend API.
+- **HeroUI 3** + **Tailwind CSS 4** — accessible components (React Aria), light and dark themes.
+- **TanStack Query** — server state; queries and mutations come from the generated API client.
+- **next-intl** — English and Russian (`messages/*.json`), with typed message keys.
+- **react-hook-form** + **zod** — forms validated with the same limits as the backend models.
+- **@hey-api/openapi-ts** — the typed API client in `src/client`, generated from the backend's OpenAPI schema.
+- **Vitest** + Testing Library — tests in `tests/`, mirroring `src/`; **Biome** — lint and format.
 
-### 1. Component Architecture & Feature-Based Structure
+## How it talks to the backend
 
-The project follows a feature-based structure combined with principles of Atomic Design:
+The browser only talks to the Next.js server, so there is no CORS and the backend need not be public:
 
--   **`routes` (Pages):** Each file corresponds to a specific page or layout (`_layout/admin.tsx`, `_layout/items.tsx`). These are compositional roots that assemble features and components.
--   **`components/ui` (UI Primitives):** Contains highly reusable, generic components like `Field`, `Dialog`, `Table`, which are the building blocks of the application.
--   **`components` (Feature Components):** Contains components tied to specific features, such as `EditItem` or `UserActionsMenu`. These components implement specific business logic.
--   **`hooks` (Logic Abstraction):** Custom hooks like `useAuth` and `useCustomToast` encapsulate and centralize reusable logic, keeping components clean and focused on presentation.
+- `/api/v1/*` is proxied to `${API_URL}/api/v1/*` (`src/app/api/v1/[...path]/route.ts`).
+- `/api/auth/login` exchanges the credentials for the backend's token and keeps it in an **httpOnly cookie**;
+  JavaScript never sees the token. The proxy sends it to the backend as `Authorization: Bearer`.
+- `src/proxy.ts` sends anonymous visitors of protected pages to the login page and logged-in users away from it.
+  A request that gets 401 (expired token) logs the user out.
+- State-changing requests from another origin are rejected (CSRF).
 
-### 2. State Management and Data Fetching with TanStack Query
+## Getting started
 
-Server state management is fully delegated to TanStack Query, which acts as a centralized cache and a single source of truth for all API data.
+Requirements: Node.js from `.nvmrc`, a running backend (see `backend/README.md`).
 
--   **Caching and Synchronization:** TanStack Query handles all caching, background refetching, and stale-data management automatically.
--   **Mutations and Data Invalidation:** To ensure data consistency after creating, updating, or deleting entities, we use the `queryClient.invalidateQueries` pattern within the `onSuccess` callback of our mutations. This is the primary mechanism for triggering data re-fetch and keeping the UI in sync with the backend.
-
-    ```typescript
-    const mutation = useMutation({
-      mutationFn: deleteUser,
-      onSuccess: () => {
-        // ... show success toast
-        queryClient.invalidateQueries({ queryKey: ["users"] });
-      },
-    });
-    ```
-
-### 3. The "Action-Dialog" Component Pattern
-
-A key architectural pattern was established for components that trigger actions in a dialog (e.g., Edit, Delete). To solve issues with state management and focus, these components are split into two parts:
-
--   **`Trigger`:** A simple component (e.g., a `MenuItem`) that only calls an `onOpen` function passed via props.
--   **`Dialog`:** The modal window component, whose visibility (`isOpen`) is controlled by state in the parent.
-
-The parent component is responsible for managing the `isOpen` state and rendering the `Dialog`, ensuring clean state flow and correct menu behavior.
-
-```tsx
-// Parent Component (e.g., UserActionsMenu.tsx)
-const [isEditDialogOpen, setEditDialogOpen] = useState(false);
-
-return (
-  <>
-    <EditUser.Trigger onOpen={() => setEditDialogOpen(true)} />
-    <EditUser.Dialog 
-      isOpen={isEditDialogOpen} 
-      onClose={() => setEditDialogOpen(false)} 
-    />
-  </>
-);
+```bash
+cp .env.example .env    # API_URL (the backend), SITE_URL (the public address of the site)
+npm install
+npm run dev             # http://localhost:5173
 ```
 
-### 4. Centralized Providers and Theming
+After changing backend routes or schemas, regenerate the client (the backend must be running) and commit `src/client`:
 
-All top-level providers (`QueryClientProvider`, `ChakraProvider`, `RouterProvider`) are consolidated in `main.tsx` and wrapped in a single `<CustomProvider>`. This creates a single, clean entry point for application-wide context and theming.
+```bash
+npm run generate-client
+```
 
-## Quick Start
+## Scripts
 
-1.  **Create a `.env` file:** Copy `frontend/.env.example` to `frontend/.env` and set the required variables.
+| Command                   | Purpose                                                 |
+|---------------------------|---------------------------------------------------------|
+| `npm run dev`             | Development server on port 5173                         |
+| `npm run build`           | Production build (`.next/standalone`)                   |
+| `npm run typecheck`       | TypeScript check                                        |
+| `npm run lint`            | Biome lint and format, with fixes                       |
+| `npm run test`            | Vitest in watch mode; `npm run coverage` runs it once   |
+| `npm run generate-client` | Regenerate `src/client` from the backend's OpenAPI      |
 
-    ```dotenv
-    # The URL of your running backend API
-    VITE_API_URL=http://localhost:8000
-    
-    # The URL for the Mailcatcher UI to view sent emails during development
-    MAILCATCHER_HOST=http://localhost:1080
-    ```
+CI (`.github/workflows/frontend.yml`) runs `npm audit`, Biome, TypeScript, the tests and the build.
 
-2.  **Install dependencies:** Navigate to the `/frontend` directory and run:
-    ```bash
-    npm install
-    ```
+## Project structure
 
-3.  **Run the development server:**
-    ```bash
-    npm run dev
-    ```
-    The frontend will be available at http://localhost:5173/.
+```
+src/
+├── app/                 # Routes: [locale]/(auth) public auth pages, [locale]/(app) logged-in area,
+│                        # api/ (proxy and auth routes), sitemap.ts, robots.ts
+├── components/
+│   ├── ui/              # Primitives on top of HeroUI: form fields, dialogs, pagination
+│   └── <Feature>/       # Auth, Items, Admin, UserSettings, Dashboard, Common
+├── hooks/               # useAuth, useNotify, usePageParam, entity mutations
+├── i18n/                # next-intl routing and navigation
+├── lib/                 # API errors, validation schemas, query client, server helpers
+├── client/              # Generated API client — never edit by hand
+├── styles/globals.css   # Tailwind + HeroUI theme (brand colors go here)
+└── proxy.ts             # Page access rules + locale routing
+```
 
-## API Client Generation
+## Deployment
 
-The TypeScript client used to communicate with the FastAPI backend is generated from the backend's OpenAPI schema.
+`npm run build` produces a self-contained server in `.next/standalone`. Copy the static files next to it and run it
+with Node (for example under pm2 or systemd):
 
-To update the client after making changes to the backend API:
+```bash
+npm ci && npm run build
+cp -r public .next/standalone/ && cp -r .next/static .next/standalone/.next/
+cd .next/standalone && PORT=5173 API_URL=http://127.0.0.1:8000 SITE_URL=https://example.com node server.js
+```
 
-1.  Ensure the backend development server is running.
-2.  From the `/frontend` directory, run the generation script:
-    ```bash
-    npm run generate-client
-    ```3.  Commit the changes in the `frontend/src/client` directory.
-
-## Original Features
-
-The project's core functionality (user authentication, CRUD operations, password recovery) remains unchanged. For details on end-to-end testing with Playwright and other operational aspects not covered here, please refer to the [README of the original project](https://github.com/fastapi/full-stack-fastapi-template/blob/master/frontend/README.md).
+- `API_URL` and `SITE_URL` are read at runtime, so one build serves any environment.
+- Behind a reverse proxy (nginx) pass `Host` and `X-Forwarded-For` to Next.js; run the backend's Uvicorn with
+  `--proxy-headers`, so that its rate limiter sees the visitor's IP rather than the Next.js server's.
+- Set the backend's `FRONTEND_HOST` to the site's address: it builds the links in the emails.

@@ -1,64 +1,44 @@
 /**
- * @file Defines the appearance settings page component.
- * @description Provides the UI and logic for selecting the application theme (system, light, or dark).
- * Handles theme selection using next-themes and renders radio buttons for theme options.
- * @module Appearance
+ * @file Settings tab "Appearance": light, dark or the system theme.
  */
 
-import { Container, Heading, Stack } from "@chakra-ui/react"
+"use client"
+
+import { Label, Radio, RadioGroup, useIsHydrated } from "@heroui/react"
+import { useTranslations } from "next-intl"
 import { useTheme } from "next-themes"
-import type { FC, ReactElement } from "react"
+import type { ReactNode } from "react"
 
-import { Radio, RadioGroup } from "@/components/ui/radio"
-// @ts-ignore
-import type { ValueChangeDetails } from "@chakra-ui/react/dist/types/components/radio-group/namespace"
-
-// region Type Aliases
+const THEMES = ["system", "light", "dark"] as const
 
 /**
- * Type alias for the Appearance component.
- * @type {AppearanceComponent}
+ * Renders the theme choice (disabled until hydration, when the stored theme becomes known).
+ * @returns The radio group.
  */
-type AppearanceComponent = FC
-
-// endregion
-
-// region Main Code
-
-/**
- * Main component for the appearance settings page.
- * @description Renders a radio group for selecting the application theme and updates it via next-themes.
- * @returns {ReactElement} The rendered appearance settings component.
- */
-const Appearance: AppearanceComponent = (): ReactElement => {
+export function Appearance(): ReactNode {
+  const t = useTranslations("Settings")
   const { theme, setTheme } = useTheme()
-
+  const isHydrated: boolean = useIsHydrated()
   return (
-    <Container maxW="full">
-      <Heading size="sm" py={4}>
-        Appearance
-      </Heading>
-      <RadioGroup
-        onValueChange={(e: ValueChangeDetails): void => setTheme(e.value)}
-        value={theme ?? "system"}
-        colorPalette="teal"
-      >
-        <Stack>
-          <Radio value="system">System</Radio>
-          <Radio value="light">Light Mode</Radio>
-          <Radio value="dark">Dark Mode</Radio>
-        </Stack>
-      </RadioGroup>
-    </Container>
+    <RadioGroup
+      name="theme"
+      value={isHydrated ? (theme ?? "system") : null}
+      onChange={setTheme}
+      isDisabled={!isHydrated}
+    >
+      <Label>{t("theme")}</Label>
+      {THEMES.map(
+        (value: (typeof THEMES)[number]): ReactNode => (
+          <Radio key={value} value={value}>
+            <Radio.Content>
+              <Radio.Control>
+                <Radio.Indicator />
+              </Radio.Control>
+              {t(`theme_${value}`)}
+            </Radio.Content>
+          </Radio>
+        ),
+      )}
+    </RadioGroup>
   )
 }
-
-// endregion
-
-// region Optional Declarations
-
-Appearance.displayName = "Appearance"
-
-// endregion
-
-export default Appearance

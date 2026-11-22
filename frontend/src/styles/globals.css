@@ -1,0 +1,14 @@
+/*
+ * Styles of the site: Tailwind CSS v4 + the HeroUI theme (the order of the imports matters).
+ *
+ * Colors, radius and fonts are HeroUI's semantic CSS variables. To brand a site, override them after the imports
+ * (generate a full set at https://heroui.com/themes), for example:
+ *
+ *   @layer base {
+ *     :root, [data-theme="light"] { --accent: oklch(0.62 0.19 255); --radius: 0.5rem; }
+ *     [data-theme="dark"] { --accent: oklch(0.7 0.16 255); }
+ *   }
+ */
+
+@import "tailwindcss";
+@import "@heroui/styles";

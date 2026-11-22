@@ -1,0 +1,49 @@
+name: Frontend
+
+permissions:
+  contents: read
+
+on:
+  push:
+    branches: [ "master" ]
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/frontend.yml'
+  pull_request:
+    branches: [ "master" ]
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/frontend.yml'
+  # New advisories appear while the code stays unchanged
+  schedule:
+    - cron: '27 5 * * 1'
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v7
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: frontend/.nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+      # Audits the whole installed tree, transitive packages included
+      - name: npm audit
+        run: npm audit --omit=dev --audit-level=high
+      - name: Biome
+        run: npx biome ci
+      - name: TypeScript
+        run: npm run typecheck
+      - name: Vitest
+        run: npm run coverage
+      - name: Build
+        run: npm run build
+        env:
+          API_URL: http://127.0.0.1:8000

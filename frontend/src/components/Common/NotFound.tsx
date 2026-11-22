@@ -1,61 +1,25 @@
 /**
- * @file Defines the NotFound component.
- * @description Renders a 404 error page with a message and a button to return to the homepage.
- * @module NotFound
+ * @file The 404 page content.
  */
 
-"use client"
-
-import { Button, Text, VStack } from "@chakra-ui/react"
-import { Link } from "@tanstack/react-router"
-import type React from "react"
-import type { FC } from "react"
-
-// region Type Aliases
+import { useTranslations } from "next-intl"
+import type { ReactNode } from "react"
+import { LinkButton } from "@/components/ui/LinkButton"
 
 /**
- * Type alias for the NotFound component.
- * @type {NotFoundComponent}
+ * Renders the 404 message with a link home.
+ * @returns The page content.
  */
-type NotFoundComponent = FC
-
-// endregion
-
-// region Main Code
-
-/**
- * NotFound component for rendering a 404 error page.
- * @returns {React.ReactElement} The rendered NotFound component.
- */
-const NotFound: NotFoundComponent = (): React.ReactElement => {
+export function NotFound(): ReactNode {
+  const t = useTranslations("NotFound")
   return (
-    <main>
-      <VStack h="100vh" align="center" justify="center" p={4} data-testid="not-found">
-        <Text fontSize={{ base: "6xl", md: "8xl" }} fontWeight="bold" lineHeight="1" mb={4}>
-          404
-        </Text>
-        <Text fontSize={{ base: "xl", md: "2xl" }} fontWeight="bold" mb={2}>
-          Oops!
-        </Text>
-        <Text fontSize={{ base: "md", md: "lg" }} color="gray.600" mb={4} textAlign="center">
-          The page you are looking for was not found.
-        </Text>
-        <Link to="/" aria-label="Navigate to homepage">
-          <Button variant="solid" colorScheme="teal" mt={4}>
-            Go Back
-          </Button>
-        </Link>
-      </VStack>
+    <main className="flex min-h-dvh flex-col items-center justify-center gap-3 p-4 text-center">
+      <p className="text-7xl font-bold text-accent">404</p>
+      <h1 className="text-2xl font-semibold">{t("title")}</h1>
+      <p className="text-muted">{t("description")}</p>
+      <LinkButton href="/" variant="secondary" className="mt-2">
+        {t("goHome")}
+      </LinkButton>
     </main>
   )
 }
-
-// endregion
-
-// region Optional Declarations
-
-NotFound.displayName = "NotFound"
-
-// endregion
-
-export default NotFound
