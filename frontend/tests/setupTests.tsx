@@ -1,3 +1,4 @@
+// noinspection JSUnusedGlobalSymbols - the mocks implement what the mocked modules export
 /**
  * @file Global test setup: jest-dom matchers, mocked navigation, an absolute API base URL and cleanup.
  */
@@ -25,7 +26,10 @@ if (typeof window !== "undefined") {
       matches: false,
       media: query,
       onchange: null,
+      // Deprecated, but next-themes still subscribes with it
+      // noinspection JSDeprecatedSymbols
       addListener: () => undefined,
+      // noinspection JSDeprecatedSymbols
       removeListener: () => undefined,
       addEventListener: () => undefined,
       removeEventListener: () => undefined,
@@ -61,7 +65,7 @@ vi.mock("@/i18n/navigation", () => ({
   redirect: vi.fn(),
 }))
 
-// Server-side next-intl: translations come from the English messages, the locale setter is a spy
+// Server-side next-intl: translations come from the English messages, the locale is English unless a test says otherwise
 vi.mock("next-intl/server", async () => {
   const { createTranslator } = await import("next-intl")
   const { default: messages } = await import("../messages/en.json")
@@ -72,7 +76,7 @@ vi.mock("next-intl/server", async () => {
         messages,
         namespace: (typeof options === "string" ? options : options?.namespace) as never,
       }),
-    setRequestLocale: vi.fn(),
+    getLocale: vi.fn(async () => "en"),
     getRequestConfig: <T,>(factory: T): T => factory,
   }
 })

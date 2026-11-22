@@ -20,7 +20,7 @@ import { useNotify } from "./useNotify"
 /**
  * The user mutations.
  * @returns `create(values)`, `update(id, values)`, `remove(id)` (each throws on failure after the error toast) and
- * whether a delete is running.
+ * whether a deletion is running.
  */
 export function useUserMutations(): {
   create: (values: UserFormValues) => Promise<void>
@@ -31,6 +31,7 @@ export function useUserMutations(): {
   const t = useTranslations("Admin")
   const notify = useNotify()
   const queryClient: QueryClient = useQueryClient()
+  // noinspection JSUnusedGlobalSymbols - spread into the useMutation options below
   const callbacks = {
     onError: notify.error,
     onSettled: async (): Promise<void> => {

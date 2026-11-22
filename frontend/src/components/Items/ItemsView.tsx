@@ -33,7 +33,7 @@ export function ItemsView(): ReactNode {
   const [isAddOpen, setAddOpen] = useState<boolean>(false)
   const { create } = useItemMutations()
   const errorMessage = useErrorMessage()
-  // A superuser sees the items of all the users, so the table says whose each one is
+  // A superuser sees the items of all the users, so the table shows the owner of each one
   const { data: currentUser } = useCurrentUser()
   const showOwner: boolean = currentUser?.is_superuser === true
   const { data, error, isPending, isPlaceholderData } = useQuery({

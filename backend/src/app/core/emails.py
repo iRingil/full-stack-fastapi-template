@@ -148,13 +148,14 @@ class EmailManager:
             algorithm=self._security_manager.ALGORITHM,
         )
 
-    def _decode_token(self, *, token: str, purpose: TokenPurpose) -> dict[str, object] | None:
+    def _decode_token(self, *, token: str, purpose: TokenPurpose) -> tuple[str, dict[str, object]] | None:
         """
         Decodes a JWT token from an email link.
 
         :param token: The JWT token to verify.
         :param purpose: What the token is expected to be used for.
-        :return: The claims if the token is valid, has this purpose and an email as the subject, None otherwise.
+        :return: The email from the subject and all the claims if the token is valid, has this purpose and an email
+                 as the subject, None otherwise.
         """
         try:
             decoded_token: dict[str, object] = jwt.decode(
@@ -166,7 +167,8 @@ class EmailManager:
             return None
         if decoded_token.get(self._PURPOSE_CLAIM) != purpose:
             return None
-        return decoded_token if isinstance(decoded_token.get("sub"), str) else None
+        email: object = decoded_token.get("sub")
+        return (email, decoded_token) if isinstance(email, str) else None
 
     def generate_password_reset_token(self, email: str, version: int) -> str:
         """
@@ -189,9 +191,12 @@ class EmailManager:
         :param token: The JWT token to verify.
         :return: The email address and the token version from the token if it is valid, None otherwise.
         """
-        claims: dict[str, object] | None = self._decode_token(token=token, purpose="password_reset")
-        version: object = claims.get(self._security_manager.VERSION_CLAIM) if claims else None
-        return (str(claims["sub"]), version) if claims and isinstance(version, int) else None
+        decoded: tuple[str, dict[str, object]] | None = self._decode_token(token=token, purpose="password_reset")
+        if not decoded:
+            return None
+        email, claims = decoded
+        version: object = claims.get(self._security_manager.VERSION_CLAIM)
+        return (email, version) if isinstance(version, int) else None
 
     def generate_email_verify_token(self, email: str) -> str:
         """
@@ -210,8 +215,8 @@ class EmailManager:
         :param token: The JWT token to verify.
         :return: The email address of the user if the token is valid, None otherwise.
         """
-        claims: dict[str, object] | None = self._decode_token(token=token, purpose="email_verify")
-        return str(claims["sub"]) if claims else None
+        decoded: tuple[str, dict[str, object]] | None = self._decode_token(token=token, purpose="email_verify")
+        return decoded[0] if decoded else None
 
     # Emails
     async def send_test_email(self, email_to: str) -> None:

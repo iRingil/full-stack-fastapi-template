@@ -15,7 +15,7 @@ describe("createQueryClient", () => {
     const onUnauthorized = vi.fn()
     const client = createQueryClient(onUnauthorized)
     await client
-      .fetchQuery({ queryKey: ["me"], queryFn: () => Promise.reject(new ApiError(401, {})), retry: false })
+      .query({ queryKey: ["me"], queryFn: () => Promise.reject(new ApiError(401, {})), retry: false })
       .catch(() => undefined)
     await client
       .getMutationCache()
@@ -23,17 +23,17 @@ describe("createQueryClient", () => {
       .execute(undefined)
       .catch(() => undefined)
     await client
-      .fetchQuery({ queryKey: ["other"], queryFn: () => Promise.reject(new ApiError(500, {})), retry: false })
+      .query({ queryKey: ["other"], queryFn: () => Promise.reject(new ApiError(500, {})), retry: false })
       .catch(() => undefined)
     expect(onUnauthorized).toHaveBeenCalledTimes(2)
   })
 
   it("reports successful queries", async () => {
     const onQuerySuccess = vi.fn()
-    await createQueryClient(vi.fn(), onQuerySuccess).fetchQuery({ queryKey: ["ok"], queryFn: () => 1 })
+    await createQueryClient(vi.fn(), onQuerySuccess).query({ queryKey: ["ok"], queryFn: () => 1 })
     expect(onQuerySuccess).toHaveBeenCalledTimes(1)
     // Without a callback a successful query is just fine
-    await expect(createQueryClient(vi.fn()).fetchQuery({ queryKey: ["ok"], queryFn: () => 2 })).resolves.toBe(2)
+    await expect(createQueryClient(vi.fn()).query({ queryKey: ["ok"], queryFn: () => 2 })).resolves.toBe(2)
   })
 
   it("retries server and network errors but not client errors", () => {

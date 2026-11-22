@@ -115,7 +115,7 @@ export function errorKey(error: unknown): ErrorKey {
   if (detail in DETAIL_KEYS) {
     return DETAIL_KEYS[detail] as ErrorKey
   }
-  // A 422 joins the messages of all the fields; the password check is the one worth its own message
+  // The 422 answer joins the messages of all the fields; the password check is the one worth its own message
   if (detail.includes("This password is too common")) {
     return "commonPassword"
   }

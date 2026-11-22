@@ -1,5 +1,6 @@
 /**
- * @file 404 for requests outside any locale (rare: `proxy.ts` adds a locale to every page path).
+ * @file 404 outside the localized layout: an unknown locale, or a path no route matches (rare: `proxy.ts` adds a
+ * locale to every page path). It bypasses the layouts, so it is a whole document with its own styles.
  */
 
 import type { ReactNode } from "react"

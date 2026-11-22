@@ -11,7 +11,7 @@ export const IS_PRODUCTION: boolean = process.env.NODE_ENV === "production"
 
 /**
  * Name of the httpOnly cookie that holds the backend's access token.
- * In production it has the `__Host-` prefix: the browser then accepts it only with `Secure`, `Path=/` and no
+ * In production, it has the `__Host-` prefix: the browser then accepts it only with `Secure`, `Path=/` and no
  * `Domain`, so neither a subdomain nor a plain-HTTP page can set or overwrite it. Development runs over plain HTTP,
  * where browsers reject the prefix.
  */
@@ -68,7 +68,7 @@ export function backendHeaders(request: NextRequest): Headers {
 /**
  * Rejects cross-site requests that change state (CSRF): browsers always send `Origin` with such requests.
  * @param request - The incoming request.
- * @returns True when there is no `Origin` header or it matches the host the request was sent to.
+ * @returns True when there is no `Origin` header, or it matches the host the request was sent to.
  */
 export function isSameOrigin(request: NextRequest): boolean {
   const origin: string | null = request.headers.get("origin")

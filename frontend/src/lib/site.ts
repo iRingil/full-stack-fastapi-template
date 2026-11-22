@@ -3,7 +3,6 @@
  */
 
 import type { Metadata } from "next"
-import { hasLocale } from "next-intl"
 import { getPathname } from "@/i18n/navigation"
 import { type Locale, routing } from "@/i18n/routing"
 
@@ -13,19 +12,6 @@ import { type Locale, routing } from "@/i18n/routing"
  */
 export function siteUrl(): URL {
   return new URL(process.env.SITE_URL ?? "http://localhost:5173")
-}
-
-/** Route params of every page and layout under `app/[locale]`. */
-export type LocaleParams = { params: Promise<{ locale: string }> }
-
-/**
- * Reads the locale from the route params (the root layout has already rejected unknown ones with a 404).
- * @param params - The route params.
- * @returns The locale, the default one for an unknown value.
- */
-export async function localeOf(params: LocaleParams["params"]): Promise<Locale> {
-  const { locale } = await params
-  return hasLocale(routing.locales, locale) ? locale : routing.defaultLocale
 }
 
 /**

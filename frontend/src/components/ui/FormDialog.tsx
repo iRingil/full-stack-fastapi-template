@@ -6,7 +6,7 @@
 
 import { Button, Modal } from "@heroui/react"
 import { useTranslations } from "next-intl"
-import type { FormEventHandler, ReactNode } from "react"
+import type { ReactNode, SubmitEventHandler } from "react"
 import { SurfaceFields } from "./FieldVariant"
 
 export type FormDialogProps = {
@@ -14,7 +14,7 @@ export type FormDialogProps = {
   onClose: () => void
   title: string
   submitLabel: string
-  onSubmit: FormEventHandler<HTMLFormElement>
+  onSubmit: SubmitEventHandler<HTMLFormElement>
   isPending?: boolean
   children: ReactNode
 }

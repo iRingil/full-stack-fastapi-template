@@ -48,7 +48,7 @@ export function UserInformation(): ReactNode {
     resolver: zodResolver(profileSchema(tv, user?.email ?? "")),
     defaultValues: { fullName: "", email: "", currentPassword: "" },
   })
-  const isEmailChanged: boolean = isSameEmail(watch("email"), user?.email ?? "") === false
+  const isEmailChanged: boolean = !isSameEmail(watch("email"), user?.email ?? "")
 
   useEffect((): void => {
     if (user) {

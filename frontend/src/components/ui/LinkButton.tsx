@@ -15,6 +15,10 @@ export type LinkButtonProps = ComponentProps<typeof Link> & {
 /**
  * Renders the link.
  * @param props - The link props plus the button look.
+ * @param props.variant - The button variant, "primary" by default.
+ * @param props.size - The button size, "md" by default.
+ * @param props.fullWidth - Whether the button takes the whole width.
+ * @param props.className - Extra classes.
  * @returns The link.
  */
 export function LinkButton({

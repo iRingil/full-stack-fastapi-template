@@ -17,7 +17,7 @@ type OpenDialog = "edit" | "delete" | null
 
 /**
  * Renders the menu and its dialogs.
- * @param props - The user and whether they are the admin themself (then the menu is disabled: the backend
+ * @param props - The user and whether it is the admin's own account (then the menu is disabled: the backend
  * forbids deleting oneself, and one's own data is edited in the settings).
  * @returns The menu.
  */

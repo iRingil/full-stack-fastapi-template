@@ -15,9 +15,12 @@
 
 @theme {
   /* Onest (next/font; its variable is set on <html>, where this one is resolved), with system fallbacks */
+  /*noinspection CssUnresolvedCustomProperty*/
   --font-sans: var(--font-onest), ui-sans-serif, system-ui, sans-serif;
 }
 
+/* The class names below come from next-themes and HeroUI, not from this project's markup */
+/*noinspection CssUnusedSymbol*/
 @layer base {
   :root,
   .light,
@@ -51,6 +54,7 @@
   }
 }
 
+/*noinspection CssUnusedSymbol*/
 @layer components {
   /* HeroUI sets these at 12px; APCA needs 14px for their contrasts (muted or colored text) */
   .description,

@@ -15,7 +15,7 @@ type Values = { note?: string; secret: string; pin?: string; enabled: boolean }
  * @returns The form.
  */
 function Fields(): ReactNode {
-  const { control } = useForm<Values>({ defaultValues: { secret: "s3cret", enabled: false } })
+  const { control } = useForm<Values>({ defaultValues: { secret: "hidden-value", enabled: false } })
   return (
     <form>
       <FormTextField control={control} name="note" label="Note" description="Optional" multiline />

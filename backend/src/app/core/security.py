@@ -1,7 +1,7 @@
 """Provides security-related services for the application, such as password hashing and JWT token creation."""
 
 from datetime import UTC, datetime, timedelta
-from functools import lru_cache
+from functools import cached_property, lru_cache
 from typing import ClassVar
 
 import bcrypt
@@ -26,7 +26,6 @@ class SecurityManager:
         :param settings: The application settings object.
         """
         self._settings: Settings = settings
-        self._dummy_hash: str | None = None
 
     def create_access_token(self, subject: str, expires_delta: timedelta, version: int = 0) -> str:
         """
@@ -43,7 +42,8 @@ class SecurityManager:
             payload=to_encode, key=self._settings.security.secret_key.get_secret_value(), algorithm=self.ALGORITHM
         )
 
-    def verify_password(self, plain_password: str, hashed_password: str) -> bool:
+    @staticmethod
+    def verify_password(plain_password: str, hashed_password: str) -> bool:
         """
         Verifies a plain password against its hashed version.
 
@@ -71,11 +71,19 @@ class SecurityManager:
         :param plain_password: The password from the login form.
         :return: None
         """
-        if self._dummy_hash is None:
-            self._dummy_hash = self.get_password_hash(password="a-password-nobody-has")  # noqa: S106 - not a secret
         self.verify_password(plain_password=plain_password, hashed_password=self._dummy_hash)
 
-    def get_password_hash(self, password: str) -> str:
+    @cached_property
+    def _dummy_hash(self) -> str:
+        """
+        The hash that a login with an unknown email is checked against, made on first use.
+
+        :return: The bcrypt hash of a password nobody has.
+        """
+        return self.get_password_hash(password="a-password-nobody-has")  # noqa: S106 - not a secret
+
+    @staticmethod
+    def get_password_hash(password: str) -> str:
         """
         Hashes a plain password.
 

@@ -1,20 +1,35 @@
-import { describe, expect, it } from "vitest"
+import { notFound } from "next/navigation"
+import { locale } from "next/root-params"
+import { describe, expect, it, vi } from "vitest"
 import requestConfig from "@/i18n/request"
 import en from "../../messages/en.json"
 import ru from "../../messages/ru.json"
 
+// The real module is replaced by the Next.js compiler and throws when imported as is
+vi.mock("next/root-params", () => ({ locale: vi.fn() }))
+
 // getRequestConfig is mocked in setupTests to return the factory itself
 const resolve = requestConfig as unknown as (params: {
-  requestLocale: Promise<string | undefined>
+  locale?: string
 }) => Promise<{ locale: string; messages: unknown }>
 
 describe("request config", () => {
-  it("loads the messages of the requested locale", async () => {
-    expect(await resolve({ requestLocale: Promise.resolve("ru") })).toEqual({ locale: "ru", messages: ru })
+  it("loads the messages of the locale in the path", async () => {
+    vi.mocked(locale).mockResolvedValueOnce("ru")
+    expect(await resolve({})).toEqual({ locale: "ru", messages: ru })
   })
 
-  it("falls back to the default locale", async () => {
-    expect(await resolve({ requestLocale: Promise.resolve(undefined) })).toEqual({ locale: "en", messages: en })
+  it("prefers a locale passed explicitly", async () => {
+    expect(await resolve({ locale: "en" })).toEqual({ locale: "en", messages: en })
+    expect(locale).not.toHaveBeenCalled()
+  })
+
+  it("answers 404 for an unknown locale", async () => {
+    vi.mocked(locale).mockResolvedValueOnce("unknown.txt")
+    vi.mocked(notFound).mockImplementationOnce((): never => {
+      throw new Error("404")
+    })
+    await expect(resolve({})).rejects.toThrow("404")
   })
 })
 

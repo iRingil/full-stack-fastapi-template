@@ -14,6 +14,8 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
   reactCompiler: true,
   skipTrailingSlashRedirect: true,
+  // The root layout is app/[locale]/layout.tsx, so the 404 outside it is app/global-not-found.tsx
+  experimental: { globalNotFound: true },
 }
 
 export default createNextIntlPlugin("./src/i18n/request.ts")(nextConfig)

@@ -4,15 +4,14 @@
  */
 
 import type { Metadata } from "next"
-import { getTranslations, setRequestLocale } from "next-intl/server"
+import { getLocale, getTranslations } from "next-intl/server"
 import type { ReactNode } from "react"
 import type { IconType } from "react-icons"
 import { FiGlobe, FiLock, FiServer } from "react-icons/fi"
 import { PublicHeader } from "@/components/Common/PublicHeader"
 import { LinkButton } from "@/components/ui/LinkButton"
-import type { Locale } from "@/i18n/routing"
 import { DASHBOARD_PATH } from "@/lib/paths"
-import { type LocaleParams, localeAlternates, localeOf } from "@/lib/site"
+import { localeAlternates } from "@/lib/site"
 
 const FEATURES: readonly { key: "backend" | "frontend" | "auth"; icon: IconType }[] = [
   { key: "backend", icon: FiServer },
@@ -27,18 +26,16 @@ const QUICK_START: readonly { key: "backend" | "frontend" | "open"; command: str
   { key: "open", command: "http://localhost:5173" },
 ]
 
-export async function generateMetadata({ params }: LocaleParams): Promise<Metadata> {
-  const locale: Locale = await localeOf(params)
-  const t = await getTranslations({ locale, namespace: "Home" })
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getTranslations("Home")
   return {
     title: { absolute: t("metaTitle") },
     description: t("metaDescription"),
-    alternates: localeAlternates("/", locale),
+    alternates: localeAlternates("/", await getLocale()),
   }
 }
 
-export default async function HomePage({ params }: LocaleParams): Promise<ReactNode> {
-  setRequestLocale(await localeOf(params))
+export default async function HomePage(): Promise<ReactNode> {
   const t = await getTranslations("Home")
 
   return (

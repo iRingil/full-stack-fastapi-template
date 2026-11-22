@@ -19,7 +19,7 @@ import { useNotify } from "./useNotify"
 /**
  * The item mutations.
  * @returns `create(values)`, `update(id, values)`, `remove(id)` (each throws on failure after the error toast) and
- * whether a delete is running.
+ * whether a deletion is running.
  */
 export function useItemMutations(): {
   create: (values: ItemFormValues) => Promise<void>
@@ -30,6 +30,7 @@ export function useItemMutations(): {
   const t = useTranslations("Items")
   const notify = useNotify()
   const queryClient: QueryClient = useQueryClient()
+  // noinspection JSUnusedGlobalSymbols - spread into the useMutation options below
   const callbacks = {
     onError: notify.error,
     onSettled: (): Promise<void> => queryClient.invalidateQueries({ queryKey: readItemsQueryKey() }),

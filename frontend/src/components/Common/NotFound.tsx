@@ -8,7 +8,7 @@ import { LinkButton } from "@/components/ui/LinkButton"
 
 /**
  * Renders the 404 message with a link home.
- * @description The page title is set here (React hoists `<title>` into the head): a 404 has no page metadata.
+ * @description The page title is set here, as a 404 has no page metadata: React hoists `<title>` into the head.
  * @returns The page content.
  */
 export function NotFound(): ReactNode {

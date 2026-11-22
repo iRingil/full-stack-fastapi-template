@@ -11,7 +11,7 @@ import { backendHeaders, backendUrl, errorResponse, isSameOrigin } from "@/lib/s
 /** Backend paths the browser must not call directly. */
 const BLOCKED_PATHS: ReadonlySet<string> = new Set(["/api/v1/login/access-token"])
 
-/** Methods that cannot change state, so they skip the CSRF check and carry no body. */
+/** Methods that cannot change state, so they skip the CSRF check and are sent without a body. */
 const SAFE_METHODS: ReadonlySet<string> = new Set(["GET", "HEAD", "OPTIONS"])
 
 /** Response headers that describe the backend connection, not the body that is passed on. */

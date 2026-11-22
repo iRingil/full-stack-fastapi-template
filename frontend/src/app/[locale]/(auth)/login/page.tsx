@@ -4,20 +4,17 @@
  */
 
 import type { Metadata } from "next"
-import { getTranslations, setRequestLocale } from "next-intl/server"
+import { getLocale, getTranslations } from "next-intl/server"
 import { type ReactNode, Suspense } from "react"
 import { LoginForm } from "@/components/Auth/LoginForm"
-import type { Locale } from "@/i18n/routing"
-import { type LocaleParams, localeAlternates, localeOf } from "@/lib/site"
+import { localeAlternates } from "@/lib/site"
 
-export async function generateMetadata({ params }: LocaleParams): Promise<Metadata> {
-  const locale: Locale = await localeOf(params)
-  const t = await getTranslations({ locale, namespace: "Login" })
-  return { title: t("title"), alternates: localeAlternates("/login", locale) }
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getTranslations("Login")
+  return { title: t("title"), alternates: localeAlternates("/login", await getLocale()) }
 }
 
-export default async function LoginPage({ params }: LocaleParams): Promise<ReactNode> {
-  setRequestLocale(await localeOf(params))
+export default function LoginPage(): ReactNode {
   return (
     <Suspense>
       <LoginForm />

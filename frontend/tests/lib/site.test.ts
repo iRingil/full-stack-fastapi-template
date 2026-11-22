@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
-import { localeAlternates, localeOf, siteUrl } from "@/lib/site"
+import { localeAlternates, siteUrl } from "@/lib/site"
 
 afterEach((): void => {
   vi.unstubAllEnvs()
@@ -11,13 +11,6 @@ describe("siteUrl", () => {
     expect(siteUrl().href).toBe("https://example.com/")
     vi.stubEnv("SITE_URL", undefined)
     expect(siteUrl().href).toBe("http://localhost:5173/")
-  })
-})
-
-describe("localeOf", () => {
-  it("keeps a known locale and falls back to the default one", async () => {
-    expect(await localeOf(Promise.resolve({ locale: "ru" }))).toBe("ru")
-    expect(await localeOf(Promise.resolve({ locale: "xx" }))).toBe("en")
   })
 })
 

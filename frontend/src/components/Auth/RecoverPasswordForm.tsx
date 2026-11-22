@@ -1,6 +1,6 @@
 /**
  * @file "Forgot password": asks the backend to email a password reset link.
- * @description The backend answers the same whether or not the account exists, so the form does not reveal
+ * @description The backend answers the same whether the account exists, so the form does not reveal
  * registered emails. The address is sent in the request body: URLs end up in access logs.
  */
 

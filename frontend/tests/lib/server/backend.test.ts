@@ -67,7 +67,7 @@ describe("tokenMaxAge", () => {
     expect(tokenMaxAge(fakeJwt({ exp: 1 }), 400_000)).toBe(0)
   })
 
-  it.each(["nodots", "a.%%%.c", fakeJwt({ sub: "x" })])("is undefined for %s", (token) => {
+  it.each(["no-dots", "a.%%%.c", fakeJwt({ sub: "x" })])("is undefined for %s", (token) => {
     expect(tokenMaxAge(token)).toBeUndefined()
   })
 })
