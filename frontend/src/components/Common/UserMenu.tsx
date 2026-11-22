@@ -40,7 +40,7 @@ export function UserMenu(): ReactNode {
   const onAction = (key: Key): void => {
     if (key === "settings") {
       router.push("/settings")
-    } else if (key === "logout") {
+    } else {
       void logout()
     }
   }

@@ -13,7 +13,7 @@ import { usePathname, useRouter } from "@/i18n/navigation"
 import { type Locale, routing } from "@/i18n/routing"
 
 /** Each language is named in itself, so a visitor finds theirs whatever the current language is. */
-const LANGUAGE_NAMES: Record<string, string> = { en: "English", ru: "Русский" }
+const LANGUAGE_NAMES: Record<Locale, string> = { en: "English", ru: "Русский" }
 
 /**
  * Renders the menu.
@@ -41,8 +41,8 @@ export function LocaleSwitch(): ReactNode {
         <Dropdown.Menu aria-label={t("language")} selectionMode="single" selectedKeys={[locale]} onAction={switchTo}>
           {routing.locales.map(
             (code: Locale): ReactNode => (
-              <Dropdown.Item key={code} id={code} textValue={LANGUAGE_NAMES[code] ?? code}>
-                <Label lang={code}>{LANGUAGE_NAMES[code] ?? code}</Label>
+              <Dropdown.Item key={code} id={code} textValue={LANGUAGE_NAMES[code]}>
+                <Label lang={code}>{LANGUAGE_NAMES[code]}</Label>
               </Dropdown.Item>
             ),
           )}

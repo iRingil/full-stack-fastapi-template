@@ -4,7 +4,7 @@
 
 "use client"
 
-import { Button, Chip, EmptyState, Skeleton, Table } from "@heroui/react"
+import { Button, Chip, cn, EmptyState, Skeleton, Table } from "@heroui/react"
 import { keepPreviousData, useQuery } from "@tanstack/react-query"
 import { useTranslations } from "next-intl"
 import { type ReactNode, useEffect, useState } from "react"
@@ -69,7 +69,11 @@ export function UsersView(): ReactNode {
 
       <Table>
         <Table.ScrollContainer>
-          <Table.Content aria-label={t("title")} className="min-w-[720px]">
+          {/* While the next page loads, the previous one stays dimmed (on the table: React Aria caches the rows) */}
+          <Table.Content
+            aria-label={t("title")}
+            className={cn("min-w-[720px] transition-opacity", isPlaceholderData && "opacity-50")}
+          >
             <Table.Header>
               <Table.Column isRowHeader>{tc("fullName")}</Table.Column>
               <Table.Column>{tc("email")}</Table.Column>
@@ -99,7 +103,7 @@ export function UsersView(): ReactNode {
               {(user: UserPublic): ReactNode => {
                 const isCurrentUser: boolean = user.id === currentUser?.id
                 return (
-                  <Table.Row id={user.id} className={isPlaceholderData ? "opacity-50" : undefined}>
+                  <Table.Row id={user.id}>
                     <Table.Cell className="max-w-xs">
                       <span className={user.full_name ? "font-medium" : "text-muted"}>{user.full_name || "—"}</span>
                       {isCurrentUser ? (

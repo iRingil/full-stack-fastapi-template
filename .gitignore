@@ -257,3 +257,7 @@ frontend/coverage
 
 # TanStack Router
 routeTree.gen.ts
+
+### Frontend source folders that the generic Python rules above (lib/, [Ll]ib) would hide
+!frontend/src/lib/
+!frontend/tests/lib/

@@ -3,8 +3,9 @@
  */
 
 import "@testing-library/jest-dom/vitest"
+import { toast } from "@heroui/react"
 import { cleanup } from "@testing-library/react"
-import type { AnchorHTMLAttributes, ReactNode } from "react"
+import type { AnchorHTMLAttributes } from "react"
 import { afterEach, vi } from "vitest"
 import { client } from "@/client/client.gen"
 import { installApiErrors } from "@/lib/api-error"
@@ -17,14 +18,40 @@ globalThis.ResizeObserver ??= class {
   disconnect(): void {}
 }
 
+// jsdom lacks matchMedia, which next-themes reads for the system theme (node-environment tests have no window)
+if (typeof window !== "undefined") {
+  window.matchMedia ??= (query: string): MediaQueryList =>
+    ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addListener: () => undefined,
+      removeListener: () => undefined,
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+      dispatchEvent: () => false,
+    }) as MediaQueryList
+  // ...and the Web Animations API, which the tab indicator of React Aria waits on
+  Element.prototype.getAnimations ??= (): Animation[] => []
+}
+
 // The browser resolves "/api/v1/..." against the page; jsdom's Request needs an absolute URL
 client.setConfig({ baseUrl: "http://localhost" })
 // As in the app (components/Providers.tsx): failed requests throw ApiError
 installApiErrors()
 
 vi.mock("@/i18n/navigation", () => ({
-  Link: ({ href, children, ...props }: AnchorHTMLAttributes<HTMLAnchorElement> & { href: string }): ReactNode => (
-    <a href={href} {...props}>
+  // jsdom cannot navigate: the click is recorded as router.push, as the real Link does on the client
+  Link: ({ href, children, onClick, ...props }: AnchorHTMLAttributes<HTMLAnchorElement> & { href: string }) => (
+    <a
+      href={href}
+      onClick={(event) => {
+        event.preventDefault()
+        onClick?.(event)
+        router.push(href)
+      }}
+      {...props}
+    >
       {children}
     </a>
   ),
@@ -34,14 +61,34 @@ vi.mock("@/i18n/navigation", () => ({
   redirect: vi.fn(),
 }))
 
+// Server-side next-intl: translations come from the English messages, the locale setter is a spy
+vi.mock("next-intl/server", async () => {
+  const { createTranslator } = await import("next-intl")
+  const { default: messages } = await import("../messages/en.json")
+  return {
+    getTranslations: async (options?: string | { namespace?: string }) =>
+      createTranslator({
+        locale: "en",
+        messages,
+        namespace: (typeof options === "string" ? options : options?.namespace) as never,
+      }),
+    setRequestLocale: vi.fn(),
+    getRequestConfig: <T,>(factory: T): T => factory,
+  }
+})
+
 vi.mock("next/navigation", () => ({
   useSearchParams: () => navigation.searchParams,
   usePathname: () => navigation.pathname,
   useRouter: () => router,
   notFound: vi.fn(),
+  redirect: vi.fn(),
+  permanentRedirect: vi.fn(),
 }))
 
 afterEach((): void => {
+  // The toast queue is global: without this, one test's toasts show up in the next
+  toast.clear()
   cleanup()
   vi.restoreAllMocks()
   router.push.mockReset()

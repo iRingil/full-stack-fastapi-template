@@ -41,6 +41,7 @@ jobs:
         run: npx biome ci
       - name: TypeScript
         run: npm run typecheck
+      # Fails below 100% of lines, branches, functions and statements (thresholds in vitest.config.ts)
       - name: Vitest
         run: npm run coverage
       - name: Build

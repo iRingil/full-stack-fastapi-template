@@ -34,8 +34,9 @@ export function FormDialog({
   children,
 }: FormDialogProps): ReactNode {
   const t = useTranslations("Common")
+  // The dialog has no trigger inside, so it only ever reports closing (Escape, the backdrop, a close button)
   return (
-    <Modal.Backdrop isOpen={isOpen} onOpenChange={(open: boolean): void => (open ? undefined : onClose())}>
+    <Modal.Backdrop isOpen={isOpen} onOpenChange={onClose}>
       <Modal.Container>
         <Modal.Dialog className="sm:max-w-[480px]">
           <form noValidate onSubmit={onSubmit}>

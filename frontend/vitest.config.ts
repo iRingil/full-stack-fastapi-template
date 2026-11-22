@@ -22,6 +22,8 @@ export default defineConfig({
       reporter: ["text", "html"],
       include: ["src/**/*.{ts,tsx}"],
       exclude: ["src/client/**"],
+      // `npm run coverage` (and CI) fails if any line, branch, function or statement of src/ is not covered
+      thresholds: { 100: true },
     },
   },
 })

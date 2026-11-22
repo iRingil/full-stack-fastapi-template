@@ -52,7 +52,8 @@ npm run generate-client
 | `npm run test`            | Vitest in watch mode; `npm run coverage` runs it once |
 | `npm run generate-client` | Regenerate `src/client` from the backend's OpenAPI    |
 
-CI (`.github/workflows/frontend.yml`) runs `npm audit`, Biome, TypeScript, the tests and the build.
+CI (`.github/workflows/frontend.yml`) runs `npm audit`, Biome, TypeScript, the tests and the build. Test coverage of `src/`
+(except the generated client) must be 100% of lines, branches, functions and statements: `npm run coverage` fails below it.
 
 ## Project structure
 

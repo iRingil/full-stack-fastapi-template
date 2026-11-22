@@ -79,4 +79,28 @@ describe("ItemsView", () => {
     renderWithProviders(<ItemsView />)
     expect(await screen.findByText("Database is down", {}, { timeout: 5000 })).toBeInTheDocument()
   })
+
+  it("dims the rows of the previous page while the next one loads", async () => {
+    navigation.searchParams = new URLSearchParams("page=1")
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const skip = new URL((input as Request).url).searchParams.get("skip")
+      return skip === "0" ? jsonResponse({ data: [ITEM], count: 20 }) : new Promise<Response>(() => undefined)
+    })
+    const { rerender } = renderWithProviders(<ItemsView />)
+    await screen.findByText("First")
+
+    navigation.searchParams = new URLSearchParams("page=2")
+    rerender(<ItemsView />)
+
+    await waitFor(() => expect(screen.getByRole("grid", { name: "Items" })).toHaveClass("opacity-50"))
+  })
+
+  it("closes the add dialog on cancel", async () => {
+    mockBackend([], 0)
+    renderWithProviders(<ItemsView />)
+
+    await userEvent.click(await screen.findByRole("button", { name: "Add item" }))
+    await userEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Cancel" }))
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument())
+  })
 })

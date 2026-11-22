@@ -33,8 +33,9 @@ export function ConfirmDialog({
   isPending,
 }: ConfirmDialogProps): ReactNode {
   const t = useTranslations("Common")
+  // The dialog has no trigger inside, so it only ever reports closing (Escape, the backdrop, a close button)
   return (
-    <AlertDialog.Backdrop isOpen={isOpen} onOpenChange={(open: boolean): void => (open ? undefined : onClose())}>
+    <AlertDialog.Backdrop isOpen={isOpen} onOpenChange={onClose}>
       <AlertDialog.Container>
         <AlertDialog.Dialog className="sm:max-w-[420px]">
           <AlertDialog.Header>

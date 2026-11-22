@@ -43,4 +43,12 @@ describe("TablePagination", () => {
     rerender(<TablePagination page={3} pageSize={10} total={25} onPageChange={vi.fn()} />)
     expect(screen.getByRole("button", { name: /next/i })).toBeDisabled()
   })
+
+  it("collapses distant pages into ellipses", () => {
+    const { container } = renderWithProviders(
+      <TablePagination page={5} pageSize={10} total={100} onPageChange={vi.fn()} />,
+    )
+    expect(container.querySelectorAll(".pagination__ellipsis")).toHaveLength(2)
+    expect(screen.getByRole("button", { name: "5" })).toHaveAttribute("aria-current", "page")
+  })
 })

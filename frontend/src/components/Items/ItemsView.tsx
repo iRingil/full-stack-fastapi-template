@@ -4,7 +4,7 @@
 
 "use client"
 
-import { Button, EmptyState, Skeleton, Table } from "@heroui/react"
+import { Button, cn, EmptyState, Skeleton, Table } from "@heroui/react"
 import { keepPreviousData, useQuery } from "@tanstack/react-query"
 import { useTranslations } from "next-intl"
 import { type ReactNode, useEffect, useState } from "react"
@@ -58,7 +58,11 @@ export function ItemsView(): ReactNode {
 
       <Table>
         <Table.ScrollContainer>
-          <Table.Content aria-label={t("title")} className="min-w-[560px]">
+          {/* While the next page loads, the previous one stays dimmed (on the table: React Aria caches the rows) */}
+          <Table.Content
+            aria-label={t("title")}
+            className={cn("min-w-[560px] transition-opacity", isPlaceholderData && "opacity-50")}
+          >
             <Table.Header>
               <Table.Column isRowHeader>{t("itemTitle")}</Table.Column>
               <Table.Column>{t("itemDescription")}</Table.Column>
@@ -85,7 +89,7 @@ export function ItemsView(): ReactNode {
               }
             >
               {(item: ItemPublic): ReactNode => (
-                <Table.Row id={item.id} className={isPlaceholderData ? "opacity-50" : undefined}>
+                <Table.Row id={item.id}>
                   <Table.Cell className="max-w-xs truncate font-medium">{item.title}</Table.Cell>
                   <Table.Cell className="max-w-md truncate text-muted">{item.description || "—"}</Table.Cell>
                   <Table.Cell className="text-end">

@@ -32,18 +32,24 @@ export function Providers({ children }: { children: ReactNode }): ReactNode {
   const locale: Locale = useLocale()
   const isLoggingOut = useRef<boolean>(false)
 
+  // One logout per session end: after it, the still mounted queries refetch and get 401 again until the page
+  // changes; the guard lifts only when a query succeeds, i.e. after the next login
   const [queryClient] = useState<QueryClient>(() =>
-    createQueryClient((): void => {
-      if (isLoggingOut.current) {
-        return
-      }
-      isLoggingOut.current = true
-      void requestLogout().then((): void => {
-        queryClient.clear()
-        router.replace(LOGIN_PATH)
+    createQueryClient(
+      (): void => {
+        if (isLoggingOut.current) {
+          return
+        }
+        isLoggingOut.current = true
+        void requestLogout().then((): void => {
+          queryClient.clear()
+          router.replace(LOGIN_PATH)
+        })
+      },
+      (): void => {
         isLoggingOut.current = false
-      })
-    }),
+      },
+    ),
   )
 
   return (

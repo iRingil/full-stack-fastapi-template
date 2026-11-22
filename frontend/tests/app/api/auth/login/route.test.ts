@@ -54,6 +54,13 @@ describe("login route", () => {
     expect(response.headers.has("set-cookie")).toBe(false)
   })
 
+  it("labels a backend error without a content type as JSON", async () => {
+    // A byte body gets no content type, unlike a string one
+    fetchMock.mockResolvedValue(new Response(new TextEncoder().encode('{"detail":"x"}'), { status: 400 }))
+    const response = await POST(loginRequest())
+    expect(response.headers.get("content-type")).toBe("application/json")
+  })
+
   it("rejects a cross-site login", async () => {
     const response = await POST(loginRequest({ origin: "https://evil.test" }))
     expect(response.status).toBe(403)

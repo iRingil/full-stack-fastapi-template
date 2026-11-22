@@ -59,3 +59,54 @@ export function jsonResponse(body: unknown, status = 200): Response {
 export function fakeJwt(payload: object): string {
   return `header.${Buffer.from(JSON.stringify(payload)).toString("base64url")}.signature`
 }
+
+/** A backend answer: a JSON body (status 200), or a function building the response from the request. */
+export type ApiAnswer = object | ((request: Request) => Response | Promise<Response>)
+
+/**
+ * Mocks the backend behind the generated client and the auth routes.
+ * @param routes - Answers by "METHOD /path" (e.g. "GET /api/v1/users/me"); other requests get a 500.
+ * @returns The fetch spy; {@link calls} lists what was requested.
+ */
+export function mockApi(routes: Record<string, ApiAnswer>) {
+  return vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+    const request: Request =
+      input instanceof Request ? input : new Request(new URL(String(input), "http://localhost"), init)
+    const answer: ApiAnswer | undefined = routes[`${request.method} ${new URL(request.url).pathname}`]
+    if (answer === undefined) {
+      return jsonResponse({ detail: `unexpected ${request.method} ${request.url}` }, 500)
+    }
+    return typeof answer === "function" ? answer(request) : jsonResponse(answer)
+  })
+}
+
+/**
+ * Lists the requests a fetch spy received.
+ * @param spy - The spy from {@link mockApi}.
+ * @returns "METHOD /path" for each call.
+ */
+export function calls(spy: ReturnType<typeof mockApi>): string[] {
+  return spy.mock.calls.map(([input, init]) => {
+    const request: Request =
+      input instanceof Request ? input : new Request(new URL(String(input), "http://localhost"), init)
+    return `${request.method} ${new URL(request.url).pathname}`
+  })
+}
+
+/** A superuser and a regular user, as `GET /users/me` returns them. */
+export const SUPERUSER = {
+  id: "a1",
+  email: "admin@example.com",
+  full_name: "Ada Admin",
+  is_superuser: true,
+  is_active: true,
+  is_email_verified: true,
+}
+export const REGULAR_USER = {
+  id: "u1",
+  email: "user@example.com",
+  full_name: null,
+  is_superuser: false,
+  is_active: true,
+  is_email_verified: false,
+}
