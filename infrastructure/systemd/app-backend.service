@@ -1,0 +1,44 @@
+# The backend: FastAPI under Uvicorn, reachable only from this host (nginx -> Next.js -> here).
+#
+# Before the first start (as the user `app`):
+#   cd /opt/app/backend && python3.13 -m venv .venv && .venv/bin/pip install -r src/requirements.txt
+#   cp src/.env.example src/.env   # fill it in, with ENVIRONMENT=production
+#   cd src && ../.venv/bin/python -m app.initial_data
+# The application log goes to /opt/app/backend/src/logs/<project name>.log (rotated by
+# infrastructure/logrotate/app); stdout and stderr go to the journal: `journalctl -u app-backend`.
+
+[Unit]
+Description=Full Stack FastAPI - backend (Uvicorn)
+After=network.target postgresql.service
+PartOf=app.target
+
+[Service]
+User=app
+Group=app
+WorkingDirectory=/opt/app/backend/src
+Environment="PATH=/opt/app/backend/.venv/bin:/usr/bin:/bin"
+
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+ProtectKernelModules=true
+PrivateTmp=true
+# The code writes its log next to itself (backend/src/logs); "+" creates the folder outside the sandbox
+ExecStartPre=+/usr/bin/install -d -o app -g app /opt/app/backend/src/logs
+ReadWritePaths=-/opt/app/backend/src/logs
+
+# One process: the rate limiters count in the memory of a process, so with N workers a client would get N times
+# the limit. --proxy-headers takes the client address from X-Forwarded-For, trusted from 127.0.0.1 only.
+ExecStart=/opt/app/backend/.venv/bin/uvicorn app.main:app \
+         --host 127.0.0.1 \
+         --port 8000 \
+         --proxy-headers \
+         --log-config log_config.yaml
+
+Restart=always
+TimeoutStopSec=10
+
+[Install]
+WantedBy=app.target

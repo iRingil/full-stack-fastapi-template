@@ -1,0 +1,17 @@
+# Rotation of the application logs: the backend's own log file and the frontend's output.
+# Install: copy to /etc/logrotate.d/app; check with `logrotate --debug /etc/logrotate.d/app`.
+#
+# copytruncate: both processes keep their log open, so the file is copied and emptied in place instead of being
+# moved; no restart, no dropped requests (a line written during the copy may be lost).
+
+/opt/app/backend/src/logs/*.log /var/log/app/*.log {
+    # The folders belong to the user `app`; logrotate works in them as that user
+    su app app
+    daily
+    rotate 7
+    missingok
+    notifempty
+    compress
+    delaycompress
+    copytruncate
+}

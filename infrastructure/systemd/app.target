@@ -1,0 +1,14 @@
+# The application as one unit: `systemctl start|stop|restart app.target` handles the backend and the frontend.
+#
+# Install: copy app.target, app-backend.service and app-frontend.service to /etc/systemd/system/, then
+#   systemctl daemon-reload && systemctl enable --now app.target
+# Layout they expect: the repository in /opt/app, owned by the system user `app`
+#   (useradd --system --home-dir /opt/app --shell /usr/sbin/nologin app).
+
+[Unit]
+Description=Full Stack FastAPI application
+Requires=app-backend.service app-frontend.service
+After=postgresql.service nginx.service
+
+[Install]
+WantedBy=multi-user.target

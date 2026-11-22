@@ -1,0 +1,43 @@
+# The frontend: the standalone Next.js server, reachable only from this host (nginx proxies to it).
+#
+# Before the first start and after every update (as the user `app`, with the Node version of frontend/.nvmrc):
+#   cd /opt/app/frontend && npm ci && npm run build
+#   cp -r public .next/standalone/ && cp -r .next/static .next/standalone/.next/
+#   cp .env.example .env   # once: API_URL=http://127.0.0.1:8000, SITE_URL=https://<the site>
+# Its output goes to /var/log/app/frontend.log (rotated by infrastructure/logrotate/app).
+
+[Unit]
+Description=Full Stack FastAPI - frontend (Next.js)
+After=app-backend.service
+PartOf=app.target
+
+[Service]
+User=app
+Group=app
+WorkingDirectory=/opt/app/frontend/.next/standalone
+EnvironmentFile=/opt/app/frontend/.env
+Environment="NODE_ENV=production"
+Environment="HOSTNAME=127.0.0.1"
+Environment="PORT=5173"
+
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+ProtectKernelModules=true
+PrivateTmp=true
+# The cache of optimized images
+ReadWritePaths=-/opt/app/frontend/.next/standalone/.next/cache
+# /var/log/app, created by systemd and owned by the user `app`
+LogsDirectory=app
+StandardOutput=append:/var/log/app/frontend.log
+StandardError=append:/var/log/app/frontend.log
+
+ExecStart=/usr/bin/node server.js
+
+Restart=always
+TimeoutStopSec=10
+
+[Install]
+WantedBy=app.target
