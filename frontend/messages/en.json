@@ -59,6 +59,7 @@
   },
   "Nav": {
     "login": "Log in",
+    "toApp": "Dashboard",
     "signUp": "Sign up",
     "main": "Main navigation",
     "dashboard": "Dashboard",

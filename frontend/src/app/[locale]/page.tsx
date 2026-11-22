@@ -9,8 +9,7 @@ import type { ReactNode } from "react"
 import type { IconType } from "react-icons"
 import { FiGlobe, FiLock, FiServer } from "react-icons/fi"
 import { PublicHeader } from "@/components/Common/PublicHeader"
-import { LinkButton } from "@/components/ui/LinkButton"
-import { DASHBOARD_PATH } from "@/lib/paths"
+import { HeroActions } from "@/components/Home/HeroActions"
 import { localeAlternates } from "@/lib/site"
 
 const FEATURES: readonly { key: "backend" | "frontend" | "auth"; icon: IconType }[] = [
@@ -48,14 +47,7 @@ export default async function HomePage(): Promise<ReactNode> {
               {t("heroTitle")}
             </h1>
             <p className="mt-6 max-w-xl text-lg text-pretty">{t("heroDescription")}</p>
-            <div className="mt-8 flex flex-wrap gap-3">
-              <LinkButton href={DASHBOARD_PATH} size="lg">
-                {t("openDashboard")}
-              </LinkButton>
-              <LinkButton href="/signup" size="lg" variant="outline">
-                {t("createAccount")}
-              </LinkButton>
-            </div>
+            <HeroActions />
           </div>
 
           <figure className="rounded-3xl border border-separator bg-surface p-6 shadow-surface">

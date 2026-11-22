@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest"
-import { requestLogin, requestLogout } from "@/lib/auth-client"
+import { requestLogin, requestLogout, requestSession } from "@/lib/auth-client"
 import { jsonResponse } from "../testUtils"
 
 describe("requestLogin", () => {
@@ -44,5 +44,22 @@ describe("requestLogout", () => {
   it("ignores a network failure", async () => {
     vi.spyOn(globalThis, "fetch").mockRejectedValue(new TypeError("offline"))
     await expect(requestLogout()).resolves.toBeUndefined()
+  })
+})
+
+describe("requestSession", () => {
+  it("reads the answer of the session route", async () => {
+    const fetch = vi.spyOn(globalThis, "fetch").mockResolvedValue(Response.json({ authenticated: true }))
+    expect(await requestSession()).toBe(true)
+    expect(fetch).toHaveBeenCalledWith("/api/auth/session", { cache: "no-store" })
+  })
+
+  it("counts a guest, a malformed answer and a network failure as logged out", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(Response.json({ authenticated: false }))
+    expect(await requestSession()).toBe(false)
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(new Response("not json"))
+    expect(await requestSession()).toBe(false)
+    vi.spyOn(globalThis, "fetch").mockRejectedValueOnce(new TypeError("offline"))
+    expect(await requestSession()).toBe(false)
   })
 })

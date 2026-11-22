@@ -13,7 +13,7 @@ import {
 import { readUserMeOptions } from "@/client/@tanstack/react-query.gen"
 import type { UserPublic } from "@/client/types.gen"
 import { useRouter } from "@/i18n/navigation"
-import { type Credentials, requestLogin, requestLogout } from "@/lib/auth-client"
+import { type Credentials, requestLogin, requestLogout, requestSession } from "@/lib/auth-client"
 import { LOGIN_PATH } from "@/lib/paths"
 
 /**
@@ -22,6 +22,15 @@ import { LOGIN_PATH } from "@/lib/paths"
  */
 export function useCurrentUser(): UseQueryResult<UserPublic> {
   return useQuery(readUserMeOptions())
+}
+
+/**
+ * Whether the visitor is logged in, for the public pages (static, so the server cannot tell). Login and logout clear
+ * the cache, so the answer is kept until then.
+ * @returns The query: `data` is undefined until known, then true or false.
+ */
+export function useSession(): UseQueryResult<boolean> {
+  return useQuery({ queryKey: ["session"], queryFn: requestSession, staleTime: Number.POSITIVE_INFINITY })
 }
 
 /**

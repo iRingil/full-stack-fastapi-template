@@ -39,6 +39,19 @@ export async function requestLogin(credentials: Credentials): Promise<void> {
   }
 }
 
+/**
+ * Asks whether the browser is logged in, i.e. holds the auth cookie (httpOnly, so unreadable here).
+ * @returns True when logged in; false otherwise, and when the check fails.
+ */
+export async function requestSession(): Promise<boolean> {
+  try {
+    const response: Response = await fetch("/api/auth/session", { cache: "no-store" })
+    return ((await response.json()) as { authenticated?: unknown }).authenticated === true
+  } catch {
+    return false
+  }
+}
+
 /** Logs out: the auth cookie is cleared. A network failure is ignored, the user leaves anyway. */
 export async function requestLogout(): Promise<void> {
   try {
