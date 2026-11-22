@@ -1,0 +1,9 @@
+Hello {{ username }},
+
+Please confirm your email address by opening the link below:
+
+{{ link }}
+
+This verification link will expire in {{ valid_hours }} hours.
+
+If you didn't request this, you can disregard this email.

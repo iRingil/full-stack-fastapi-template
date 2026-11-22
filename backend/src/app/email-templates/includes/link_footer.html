@@ -1,0 +1,8 @@
+{% macro link_footer(url, expiry, disclaimer) %}
+    <p style="margin:0 0 16px;">Or copy and paste the following link into your browser:</p>
+    <p style="margin:0 0 16px; word-break:break-all;">
+        <a href="{{ url }}" style="color:#009688">{{ url }}</a>
+    </p>
+    <p style="margin:0 0 16px;">{{ expiry }}</p>
+    <p style="margin:0; color:#777777">{{ disclaimer }}</p>
+{% endmacro %}

@@ -1,0 +1,9 @@
+Welcome, {{ username }}!
+
+Your account has been created successfully. Please confirm your email address by opening the link below:
+
+{{ link }}
+
+This verification link will expire in {{ valid_hours }} hours.
+
+If you did not create an account, you can disregard this email.

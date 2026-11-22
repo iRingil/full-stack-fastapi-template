@@ -15,7 +15,7 @@ import jwt
 from app.core.config import Settings
 from app.core.emails import EmailManager, get_email_manager
 from app.core.security import SecurityManager
-from tests.conftest import html_of, with_settings
+from tests.conftest import html_of, text_of, with_settings
 
 __all__: tuple[str, ...] = ()
 
@@ -74,7 +74,9 @@ class TestLetters:
 
     async def test_reset_password_letter(self, email_manager: EmailManager, outbox: list[EmailMessage]) -> None:
         """
-        The recovery letter carries the link with a reset token and the validity period.
+        The recovery letter carries the link with a reset token and the validity period in both of its parts.
+
+        The text comes first and the HTML last: a mail client shows the last alternative it can display.
 
         :param email_manager: The test email manager.
         :param outbox: The letters sent during the test.
@@ -83,9 +85,13 @@ class TestLetters:
         await email_manager.send_reset_password_email(email_to="a@example.com")
         assert outbox[0]["Subject"] == "Test Project - Password recovery for user a@example.com"
         assert outbox[0]["From"] == "Test Project <noreply@example.com>"
-        html: str = html_of(letter=outbox[0])
-        assert "http://localhost:5173/reset-password?token=" in html
-        assert "48 hours" in html
+        assert [part.get_content_type() for part in outbox[0].walk() if not part.is_multipart()] == [
+            "text/plain",
+            "text/html",
+        ]
+        for body in (text_of(letter=outbox[0]), html_of(letter=outbox[0])):
+            assert "http://localhost:5173/reset-password?token=" in body
+            assert "48 hours" in body
 
     async def test_verification_and_welcome_letters(
         self, email_manager: EmailManager, outbox: list[EmailMessage]
@@ -104,14 +110,14 @@ class TestLetters:
             "Test Project - Welcome aboard!",
         ]
         for letter in outbox:
-            html: str = html_of(letter=letter)
-            assert "http://localhost:5173/verify-email?token=" in html
-            assert "Jane" in html
-            assert "24 hours" in html
+            for body in (text_of(letter=letter), html_of(letter=letter)):
+                assert "http://localhost:5173/verify-email?token=" in body
+                assert "Jane" in body
+                assert "24 hours" in body
 
     async def test_values_are_html_escaped(self, email_manager: EmailManager, outbox: list[EmailMessage]) -> None:
         """
-        A user-controlled value is escaped in the HTML.
+        A user-controlled value is escaped in the HTML and kept as it is in the text.
 
         :param email_manager: The test email manager.
         :param outbox: The letters sent during the test.
@@ -121,6 +127,7 @@ class TestLetters:
         html: str = html_of(letter=outbox[0])
         assert "&lt;b&gt;Jane&lt;/b&gt;" in html
         assert "<b>Jane</b>" not in html
+        assert "Welcome, <b>Jane</b>!" in text_of(letter=outbox[0])
 
 
 class TestDelivery:

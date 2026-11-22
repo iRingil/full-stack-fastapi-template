@@ -2,10 +2,10 @@
 
 from datetime import UTC, datetime, timedelta
 from functools import lru_cache
-from typing import ClassVar, Literal
+from typing import ClassVar, Literal, NamedTuple
 
 import jwt
-from fastapi_mail import ConnectionConfig, FastMail, MessageSchema, MessageType
+from fastapi_mail import ConnectionConfig, FastMail, MessageSchema, MessageType, MultipartSubtypeEnum
 from jinja2 import Environment, FileSystemLoader, Template, select_autoescape
 from jwt.exceptions import InvalidTokenError
 from loguru import logger
@@ -16,11 +16,25 @@ from app.core.constants import BASE_DIR
 from app.core.log_setup import describe_exception
 from app.core.security import SecurityManager, get_security_manager
 
-__all__: tuple[str, ...] = ("EmailManager", "get_email_manager")
+__all__: tuple[str, ...] = ("EmailManager", "Letter", "get_email_manager")
 
 
 type TokenPurpose = Literal["password_reset", "email_verify"]
 type TemplateContext = dict[str, str | int]
+
+
+class Letter(NamedTuple):
+    """
+    A rendered email: its subject and its body as plain text and as HTML.
+
+    :param subject: The subject of the email.
+    :param text: The plain text body.
+    :param html: The HTML body.
+    """
+
+    subject: str
+    text: str
+    html: str
 
 
 class EmailManager:
@@ -58,43 +72,50 @@ class EmailManager:
                 )
             )
         self._jinja_env: Environment = Environment(
-            loader=FileSystemLoader(searchpath=BASE_DIR / "app" / "email-templates" / "build"),
+            loader=FileSystemLoader(searchpath=BASE_DIR / "app" / "email-templates"),
             autoescape=select_autoescape(enabled_extensions=["html", "xml"]),
             enable_async=True,
         )
 
-    async def _render_template(self, template_name: str, context: TemplateContext) -> str:
+    async def _render_letter(self, *, name: str, subject: str, context: TemplateContext) -> Letter:
         """
-        Asynchronously renders a Jinja2 template into an HTML string.
+        Renders the two templates of a letter: name.txt (not escaped) and name.html (HTML-escaped).
 
-        :param template_name: Template name.
-        :param context: Dictionary of arguments for template.
-        :return: HTML string.
+        :param name: The template name without the extension.
+        :param subject: The subject of the letter.
+        :param context: The values for the templates.
+        :return: The rendered letter.
         """
-        template: Template = self._jinja_env.get_template(name=template_name)
-        return await template.render_async(context)
+        text_template: Template = self._jinja_env.get_template(name=f"{name}.txt")
+        html_template: Template = self._jinja_env.get_template(name=f"{name}.html")
+        return Letter(
+            subject=subject,
+            text=await text_template.render_async(context),
+            html=await html_template.render_async(context),
+        )
 
-    async def _send_email(self, email_to: str, subject: str, html_content: str) -> None:
+    async def _send_email(self, email_to: str, letter: Letter) -> None:
         """
-        The main method for sending a mail.
+        The main method for sending a mail: the plain text with the HTML as the preferred alternative.
 
         :param email_to: The email address of the recipient.
-        :param subject: The subject of the email.
-        :param html_content: The HTML content of the email.
+        :param letter: The rendered letter.
         :return: None
         """
         if not self._fm:
             logger.warning("Email sending is disabled or not configured. The letter has not been sent.")
             return
         message: MessageSchema = MessageSchema(
-            subject=subject,
+            subject=letter.subject,
             recipients=[NameEmail(name=email_to, email=email_to)],
-            body=html_content,
-            subtype=MessageType.html,
+            body=letter.text,
+            subtype=MessageType.plain,
+            alternative_body=letter.html,
+            multipart_subtype=MultipartSubtypeEnum.alternative,
         )
         try:
             await self._fm.send_message(message=message)
-            logger.info(f"Email sent to {email_to} with subject '{subject}'")
+            logger.info(f"Email sent to {email_to} with subject '{letter.subject}'")
         except Exception as exc:  # noqa: BLE001 - a failed delivery is logged, the caller is not interrupted
             logger.error(f"Failed to send email to {email_to}: {describe_exception(exc=exc)}")
 
@@ -188,24 +209,24 @@ class EmailManager:
         :param email_to: The email address of the recipient.
         :return: None
         """
-        subject: str = f"{self._settings.app.project_name} - Test email"
-        html_content: str = await self._render_template(
-            template_name="test_email.html",
+        letter: Letter = await self._render_letter(
+            name="test_email",
+            subject=f"{self._settings.app.project_name} - Test email",
             context={"project_name": self._settings.app.project_name, "email": email_to},
         )
-        await self._send_email(email_to=email_to, subject=subject, html_content=html_content)
+        await self._send_email(email_to=email_to, letter=letter)
 
-    async def render_reset_password_email(self, email_to: str) -> tuple[str, str]:
+    async def render_reset_password_email(self, email_to: str) -> Letter:
         """
         Renders a password recovery email without sending it.
 
         :param email_to: The email address of the recipient.
-        :return: The subject and the HTML content of the email.
+        :return: The rendered letter.
         """
-        subject: str = f"{self._settings.app.project_name} - Password recovery for user {email_to}"
         token: str = self.generate_password_reset_token(email=email_to)
-        html_content: str = await self._render_template(
-            template_name="reset_password.html",
+        return await self._render_letter(
+            name="reset_password",
+            subject=f"{self._settings.app.project_name} - Password recovery for user {email_to}",
             context={
                 "project_name": self._settings.app.project_name,
                 "username": email_to,
@@ -214,7 +235,6 @@ class EmailManager:
                 "link": f"{self._settings.app.frontend_url}/reset-password?token={token}",
             },
         )
-        return subject, html_content
 
     async def send_reset_password_email(self, email_to: str) -> None:
         """
@@ -223,8 +243,8 @@ class EmailManager:
         :param email_to: The email address of the recipient.
         :return: None
         """
-        subject, html_content = await self.render_reset_password_email(email_to=email_to)
-        await self._send_email(email_to=email_to, subject=subject, html_content=html_content)
+        letter: Letter = await self.render_reset_password_email(email_to=email_to)
+        await self._send_email(email_to=email_to, letter=letter)
 
     async def _send_verification_type_email(
         self, *, email_to: str, username: str, subject_text: str, template_name: str
@@ -235,13 +255,13 @@ class EmailManager:
         :param email_to: Recipient's email address.
         :param username: The name to greet the user with.
         :param subject_text: The subject of the email (after the project name).
-        :param template_name: The name of the HTML template file to use.
+        :param template_name: The name of the letter's templates, without the extension.
         :return: None
         """
-        subject: str = f"{self._settings.app.project_name} - {subject_text}"
         token: str = self.generate_email_verify_token(email=email_to)
-        html_content: str = await self._render_template(
-            template_name=template_name,
+        letter: Letter = await self._render_letter(
+            name=template_name,
+            subject=f"{self._settings.app.project_name} - {subject_text}",
             context={
                 "project_name": self._settings.app.project_name,
                 "username": username,
@@ -249,7 +269,7 @@ class EmailManager:
                 "link": f"{self._settings.app.frontend_url}/verify-email?token={token}",
             },
         )
-        await self._send_email(email_to=email_to, subject=subject, html_content=html_content)
+        await self._send_email(email_to=email_to, letter=letter)
 
     async def send_verification_email(self, email_to: str, username: str) -> None:
         """
@@ -260,7 +280,7 @@ class EmailManager:
         :return: None
         """
         await self._send_verification_type_email(
-            email_to=email_to, username=username, subject_text="Verify your email", template_name="verify_email.html"
+            email_to=email_to, username=username, subject_text="Verify your email", template_name="verify_email"
         )
 
     async def send_welcome_email(self, email_to: str, username: str) -> None:
@@ -272,7 +292,7 @@ class EmailManager:
         :return: None
         """
         await self._send_verification_type_email(
-            email_to=email_to, username=username, subject_text="Welcome aboard!", template_name="welcome_email.html"
+            email_to=email_to, username=username, subject_text="Welcome aboard!", template_name="welcome_email"
         )
 
 

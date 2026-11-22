@@ -141,8 +141,6 @@ __pycache__/
 
 # Distribution / packaging
 build/
-# Compiled email templates are used by the backend at runtime
-!backend/src/app/email-templates/build/
 develop-eggs/
 dist/
 downloads/

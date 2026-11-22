@@ -323,6 +323,22 @@ def log_messages_fixture() -> Iterator[list[str]]:
     logger.remove(handler_id)
 
 
+def _body_of(letter: EmailMessage, content_type: str) -> str:
+    """
+    A body part of a recorded letter.
+
+    :param letter: A letter from the outbox fixture.
+    :param content_type: The content type of the part.
+    :return: The decoded part.
+    """
+    for part in letter.walk():
+        if part.get_content_type() == content_type:
+            payload: object = part.get_payload(decode=True)
+            assert isinstance(payload, bytes)
+            return payload.decode(encoding=part.get_content_charset() or "utf-8")
+    raise AssertionError(f"The letter has no {content_type} part")
+
+
 def html_of(letter: EmailMessage) -> str:
     """
     The HTML body of a recorded letter.
@@ -330,9 +346,14 @@ def html_of(letter: EmailMessage) -> str:
     :param letter: A letter from the outbox fixture.
     :return: The decoded HTML.
     """
-    for part in letter.walk():
-        if part.get_content_type() == "text/html":
-            payload: object = part.get_payload(decode=True)
-            assert isinstance(payload, bytes)
-            return payload.decode(encoding=part.get_content_charset() or "utf-8")
-    raise AssertionError("The letter has no HTML part")
+    return _body_of(letter=letter, content_type="text/html")
+
+
+def text_of(letter: EmailMessage) -> str:
+    """
+    The plain text body of a recorded letter.
+
+    :param letter: A letter from the outbox fixture.
+    :return: The decoded text.
+    """
+    return _body_of(letter=letter, content_type="text/plain")

@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% from "includes/button.html" import button %}
+{% from "includes/link_footer.html" import link_footer %}
+
+{% block title %}{{ project_name }} - Verify your email{% endblock %}
+
+{% block content %}
+    <p style="margin:0 0 16px;">Hello {{ username }},</p>
+    <p style="margin:0 0 16px;">Please confirm your email address by clicking the button below:</p>
+    {{ button(url=link, label="Verify email") }}
+    {{ link_footer(url=link,
+        expiry="This verification link will expire in " ~ valid_hours ~ " hours.",
+        disclaimer="If you didn't request this, you can disregard this email.") }}
+{% endblock %}

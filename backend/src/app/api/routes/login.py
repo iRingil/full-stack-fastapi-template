@@ -1,7 +1,7 @@
 """Module for login and authentication endpoints."""
 
 from datetime import timedelta
-from typing import Annotated
+from typing import TYPE_CHECKING, Annotated
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from fastapi.responses import HTMLResponse
@@ -27,6 +27,9 @@ from app.models import (
     UserUpdate,
     VerifyEmailRequest,
 )
+
+if TYPE_CHECKING:
+    from app.core.emails import Letter
 
 __all__: tuple[str, ...] = ("login_router",)
 
@@ -215,5 +218,5 @@ class LoginRouter:
         :param email_manager: The email manager dependency.
         :return: An HTML response with the email content.
         """
-        subject, html_content = await email_manager.render_reset_password_email(email_to=email)
-        return HTMLResponse(content=html_content, headers={"subject": subject})
+        letter: Letter = await email_manager.render_reset_password_email(email_to=email)
+        return HTMLResponse(content=letter.html, headers={"subject": letter.subject})
