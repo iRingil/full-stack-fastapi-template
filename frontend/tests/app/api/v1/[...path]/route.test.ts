@@ -61,9 +61,13 @@ describe("API proxy", () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
-  // Every spelling the backend would route to the token endpoint, and a path that cannot be decoded
+  // Every spelling the backend would route to the token endpoint, and a path that cannot be decoded. The dot segments
+  // (also percent-encoded) are resolved by the request URL before the handler runs, so they cannot get around the block
   it.each([
     "/api/v1/login/access-token",
+    "/api/v1/items/../login/access-token",
+    "/api/v1/items/%2e%2e/login/access-token",
+    "/api/v1/items/%2E%2e/login/access-token",
     "/api/v1/login/access-token/",
     "/api/v1/login/access-token//",
     "/api/v1/login//access-token",

@@ -22,5 +22,11 @@ export default defineConfig({
     },
   },
   output: { path: "./src/client", postProcess: ["biome:format"] },
-  plugins: ["@hey-api/client-fetch", "@hey-api/typescript", "@hey-api/sdk", "@tanstack/react-query"],
+  plugins: [
+    // No base URL from the schema's servers: the browser calls the Next.js server on its own origin, never the backend
+    { name: "@hey-api/client-fetch", baseUrl: false },
+    "@hey-api/typescript",
+    "@hey-api/sdk",
+    "@tanstack/react-query",
+  ],
 })
