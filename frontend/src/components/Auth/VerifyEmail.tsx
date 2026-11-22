@@ -55,7 +55,7 @@ export function ResendVerificationForm(): ReactNode {
   })
 
   return (
-    <form noValidate onSubmit={onSubmit} className="flex flex-col gap-4">
+    <form method="post" noValidate onSubmit={onSubmit} className="flex flex-col gap-4">
       <FormTextField control={control} name="email" type="email" label={tc("email")} autoComplete="email" isRequired />
       <FormAlert>{errors.root?.message}</FormAlert>
       <Button type="submit" variant="secondary" fullWidth isPending={isSubmitting}>

@@ -67,7 +67,7 @@ export function RecoverPasswordForm(): ReactNode {
 
   return (
     <AuthCard title={t("title")} description={t("description")} footer={footer}>
-      <form noValidate onSubmit={onSubmit} className="flex flex-col gap-4">
+      <form method="post" noValidate onSubmit={onSubmit} className="flex flex-col gap-4">
         <FormTextField
           control={control}
           name="email"

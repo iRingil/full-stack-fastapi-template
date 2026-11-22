@@ -58,6 +58,11 @@ const wrap = (children: ReactNode): ReactNode => (
 const renderProviders = (children: ReactNode) => render(wrap(children))
 
 describe("Providers", () => {
+  it("keeps the theme script inert when rendered on the client", () => {
+    const { container } = renderProviders(<p>page</p>)
+    expect(container.querySelector("script")).toHaveAttribute("type", "text/plain")
+  })
+
   it("logs out once when requests answer 401", async () => {
     const fetch = mockApi({ "POST /api/auth/logout": () => new Response(null, { status: 204 }) })
     renderProviders(

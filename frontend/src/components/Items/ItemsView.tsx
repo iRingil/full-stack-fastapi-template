@@ -15,6 +15,7 @@ import { FormAlert } from "@/components/ui/FormAlert"
 import { TablePagination } from "@/components/ui/TablePagination"
 import { useCurrentUser } from "@/hooks/useAuth"
 import { useErrorMessage } from "@/hooks/useErrorMessage"
+import { useHydrated } from "@/hooks/useHydrated"
 import { useItemMutations } from "@/hooks/useItemMutations"
 import { usePageParam } from "@/hooks/usePageParam"
 import { ItemActionsMenu } from "./ItemActionsMenu"
@@ -33,9 +34,10 @@ export function ItemsView(): ReactNode {
   const [isAddOpen, setAddOpen] = useState<boolean>(false)
   const { create } = useItemMutations()
   const errorMessage = useErrorMessage()
-  // A superuser sees the items of all the users, so the table shows the owner of each one
+  // A superuser sees the items of all the users, so the table shows the owner of each one (after hydration: the
+  // server-rendered table knows no user)
   const { data: currentUser } = useCurrentUser()
-  const showOwner: boolean = currentUser?.is_superuser === true
+  const showOwner: boolean = useHydrated() && currentUser?.is_superuser === true
   const { data, error, isPending, isPlaceholderData } = useQuery({
     ...readItemsOptions({ query: { skip: (page - 1) * ITEMS_PAGE_SIZE, limit: ITEMS_PAGE_SIZE } }),
     placeholderData: keepPreviousData,

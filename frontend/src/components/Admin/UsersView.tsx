@@ -15,6 +15,7 @@ import { FormAlert } from "@/components/ui/FormAlert"
 import { TablePagination } from "@/components/ui/TablePagination"
 import { useCurrentUser } from "@/hooks/useAuth"
 import { useErrorMessage } from "@/hooks/useErrorMessage"
+import { useHydrated } from "@/hooks/useHydrated"
 import { usePageParam } from "@/hooks/usePageParam"
 import { useUserMutations } from "@/hooks/useUserMutations"
 import { UserActionsMenu } from "./UserActionsMenu"
@@ -29,7 +30,9 @@ export const USERS_PAGE_SIZE = 10
 export function UsersView(): ReactNode {
   const t = useTranslations("Admin")
   const tc = useTranslations("Common")
-  const { data: currentUser } = useCurrentUser()
+  // Read after hydration only: the server-rendered page knows no user, and the first client render must match it
+  const { data: loadedUser } = useCurrentUser()
+  const currentUser: UserPublic | undefined = useHydrated() ? loadedUser : undefined
   const isSuperuser: boolean = currentUser?.is_superuser === true
   const [page, setPage] = usePageParam()
   const [isAddOpen, setAddOpen] = useState<boolean>(false)

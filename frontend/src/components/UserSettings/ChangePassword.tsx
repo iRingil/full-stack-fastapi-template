@@ -55,7 +55,7 @@ export function ChangePassword(): ReactNode {
   })
 
   return (
-    <form noValidate onSubmit={onSubmit} className="flex max-w-md flex-col gap-4">
+    <form method="post" noValidate onSubmit={onSubmit} className="flex max-w-md flex-col gap-4">
       <FormPasswordField
         control={control}
         name="currentPassword"

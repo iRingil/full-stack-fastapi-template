@@ -75,7 +75,7 @@ export function SignUpForm(): ReactNode {
         </span>
       }
     >
-      <form noValidate onSubmit={onSubmit} className="flex flex-col gap-4">
+      <form method="post" noValidate onSubmit={onSubmit} className="flex flex-col gap-4">
         <FormTextField control={control} name="fullName" label={tc("fullName")} autoComplete="name" />
         <FormTextField
           control={control}

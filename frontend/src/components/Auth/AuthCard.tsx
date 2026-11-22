@@ -20,7 +20,7 @@ export type AuthCardProps = {
  */
 export function AuthCard({ title, description, children, footer }: AuthCardProps): ReactNode {
   return (
-    <Card className="w-full max-w-md p-2">
+    <Card className="w-full max-w-md p-6 sm:p-8">
       <Card.Header>
         {/* The page heading, so an <h1> rather than Card.Title's <h3> */}
         <h1 className="text-2xl font-semibold">{title}</h1>

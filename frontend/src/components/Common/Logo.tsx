@@ -21,7 +21,7 @@ export function Logo({ href = "/" }: { href?: string }): ReactNode {
         src="/assets/images/fastapi-logo.svg"
         alt=""
         width={140}
-        height={40}
+        height={26}
         priority
         unoptimized
         className="dark:brightness-125"

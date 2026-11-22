@@ -39,7 +39,7 @@ export function FormDialog({
     <Modal.Backdrop isOpen={isOpen} onOpenChange={onClose}>
       <Modal.Container>
         <Modal.Dialog className="sm:max-w-[480px]">
-          <form noValidate onSubmit={onSubmit}>
+          <form method="post" noValidate onSubmit={onSubmit}>
             <Modal.Header>
               <Modal.Heading>{title}</Modal.Heading>
             </Modal.Header>

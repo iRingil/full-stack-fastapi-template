@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event"
 import { describe, expect, it, vi } from "vitest"
 import type { UserPublic } from "@/client/types.gen"
 import { UsersView } from "@/components/Admin/UsersView"
+import * as hydration from "@/hooks/useHydrated"
 import { jsonResponse, navigation, renderWithProviders, router } from "../../testUtils"
 
 const ADMIN: UserPublic = {
@@ -42,6 +43,16 @@ describe("UsersView", () => {
     expect(screen.getByText("Inactive")).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Actions for admin@example.com" })).toBeDisabled()
     expect(screen.getByRole("button", { name: "Actions for user@example.com" })).toBeEnabled()
+  })
+
+  it("reads the current user only after hydration, as the server-rendered page did not know it", async () => {
+    const fetch = mockBackend(USER)
+    vi.spyOn(hydration, "useHydrated").mockReturnValue(false)
+    renderWithProviders(<UsersView />)
+
+    await waitFor(() => expect(fetch).toHaveBeenCalled())
+    expect(screen.getByRole("heading", { level: 1, name: "Users" })).toBeInTheDocument()
+    expect(screen.queryByText("No access")).not.toBeInTheDocument()
   })
 
   it("does not query the users for a non-superuser", async () => {

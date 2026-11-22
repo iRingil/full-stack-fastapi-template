@@ -69,7 +69,7 @@ export function UserInformation(): ReactNode {
   })
 
   return (
-    <form noValidate onSubmit={onSubmit} className="flex max-w-md flex-col gap-4">
+    <form method="post" noValidate onSubmit={onSubmit} className="flex max-w-md flex-col gap-4">
       <FormTextField control={control} name="fullName" label={tc("fullName")} autoComplete="name" />
       <FormTextField
         control={control}

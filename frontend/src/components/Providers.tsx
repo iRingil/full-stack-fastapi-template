@@ -22,6 +22,11 @@ import { createQueryClient } from "@/lib/query-client"
 
 installApiErrors()
 
+// next-themes renders an inline script that sets the theme before the first paint. It must run in the server HTML;
+// when the root layout renders again on the client (a switch of language changes the [locale] root param), the
+// same script would make React warn about a script tag it never executes, so there it is a data block instead.
+const THEME_SCRIPT_PROPS = { type: typeof window === "undefined" ? "text/javascript" : "text/plain" }
+
 /**
  * Wraps the app in its providers.
  * @param props - The app.
@@ -53,7 +58,13 @@ export function Providers({ children }: { children: ReactNode }): ReactNode {
   )
 
   return (
-    <ThemeProvider attribute={["class", "data-theme"]} defaultTheme="system" enableSystem disableTransitionOnChange>
+    <ThemeProvider
+      attribute={["class", "data-theme"]}
+      defaultTheme="system"
+      enableSystem
+      disableTransitionOnChange
+      scriptProps={THEME_SCRIPT_PROPS}
+    >
       {/* The built-in texts of the components (React Aria) follow the site's language, not the browser's */}
       <I18nProvider locale={locale}>
         <RouterProvider
