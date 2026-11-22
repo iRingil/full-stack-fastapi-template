@@ -8,7 +8,6 @@ import { Button, Drawer } from "@heroui/react"
 import { useTranslations } from "next-intl"
 import { type ReactNode, Suspense, useState } from "react"
 import { FiMenu } from "react-icons/fi"
-import { DASHBOARD_PATH } from "@/lib/paths"
 import { LocaleSwitch } from "./LocaleSwitch"
 import { Logo } from "./Logo"
 import { SidebarNav } from "./SidebarNav"
@@ -38,7 +37,7 @@ export function AppShell({ children }: { children: ReactNode }): ReactNode {
           >
             <FiMenu aria-hidden />
           </Button>
-          <Logo href={DASHBOARD_PATH} />
+          <Logo />
           <div className="ms-auto flex items-center gap-1">
             <Suspense>
               <LocaleSwitch />

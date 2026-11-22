@@ -1,14 +1,73 @@
 /*
  * Styles of the site: Tailwind CSS v4 + the HeroUI theme (the order of the imports matters).
  *
- * Colors, radius and fonts are HeroUI's semantic CSS variables. To brand a site, override them after the imports
- * (generate a full set at https://heroui.com/themes), for example:
- *
- *   @layer base {
- *     :root, [data-theme="light"] { --accent: oklch(0.62 0.19 255); --radius: 0.5rem; }
- *     [data-theme="dark"] { --accent: oklch(0.7 0.16 255); }
- *   }
+ * The brand is FastAPI's teal (the logo is #009688). Every pair of text and background below is checked with APCA
+ * (Lc ≥ 75 for body text and button labels, ≥ 60 for secondary text) and WCAG 2.2 AA (≥ 4.5:1 text, ≥ 3:1 field
+ * borders). The logo color itself is too light for white text, so buttons use a darker teal in the light theme
+ * and a lighter one, with dark text, in the dark theme. To rebrand a site, change the hues here and re-check.
  */
 
 @import "tailwindcss";
 @import "@heroui/styles";
+
+/* `dark:` follows the theme chosen on the site (next-themes sets the class), not only the OS preference */
+@custom-variant dark (&:where(.dark, .dark *, [data-theme="dark"], [data-theme="dark"] *));
+
+@theme {
+  /* Onest (next/font; its variable is set on <html>, where this one is resolved), with system fallbacks */
+  --font-sans: var(--font-onest), ui-sans-serif, system-ui, sans-serif;
+}
+
+@layer base {
+  :root,
+  .light,
+  [data-theme="light"] {
+    /* Buttons, links, focus: white on #007668 — Lc 80, 6.0:1 */
+    --accent: oklch(0.5 0.105 182);
+    --accent-foreground: oklch(1 0 0);
+    /* Secondary text: #53595f on the page — Lc 79, 7.5:1 */
+    --muted: oklch(0.46 0.012 250);
+    /* Field edges: #8f9296 — 3.1:1 against the page, 3.4:1 against a white field */
+    --field-border: oklch(0.66 0.006 250);
+    --field-border-width: 1px;
+    /* Destructive buttons: white on #d02b2f — Lc 77, 5.3:1 */
+    --danger: oklch(0.56 0.2 25.74);
+    --danger-text: oklch(0.52 0.19 25.74);
+  }
+
+  .dark,
+  [data-theme="dark"] {
+    /* Dark ink on #6de2d0 — Lc 78, 12.8:1 */
+    --accent: oklch(0.84 0.11 182);
+    --accent-foreground: oklch(0.17 0.02 182);
+    /* #b2b8bf on the page — Lc 64, 10:1 */
+    --muted: oklch(0.78 0.012 250);
+    /* #66696c — 3.2:1 against cards and fields */
+    --field-border: oklch(0.52 0.006 250);
+    --field-border-width: 1px;
+    --danger: oklch(0.56 0.2 25.74);
+    /* Error text needs a lighter red on dark: #ff9b93 — Lc 63, 9.9:1 */
+    --danger-text: oklch(0.8 0.13 25);
+  }
+}
+
+@layer components {
+  /* HeroUI sets these at 12px; APCA needs 14px for their contrasts (muted or colored text) */
+  .description,
+  .field-error,
+  .table__column,
+  .pagination__summary,
+  .chip {
+    font-size: var(--text-sm);
+    line-height: var(--text-sm--line-height);
+  }
+
+  /* Red as text (errors, the required mark) uses the readable shade, red fills keep --danger */
+  .field-error,
+  .label--invalid,
+  [data-invalid="true"] .label,
+  [aria-invalid="true"] .label,
+  .label::after {
+    color: var(--danger-text);
+  }
+}

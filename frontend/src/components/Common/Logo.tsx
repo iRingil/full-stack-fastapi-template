@@ -16,7 +16,16 @@ export function Logo({ href = "/" }: { href?: string }): ReactNode {
   const t = useTranslations("Metadata")
   return (
     <Link href={href} className="inline-flex shrink-0 items-center" aria-label={t("siteName")}>
-      <Image src="/assets/images/fastapi-logo.svg" alt="" width={140} height={40} priority unoptimized />
+      {/* The logo's teal is dim on the dark background, so it is lightened there */}
+      <Image
+        src="/assets/images/fastapi-logo.svg"
+        alt=""
+        width={140}
+        height={40}
+        priority
+        unoptimized
+        className="dark:brightness-125"
+      />
     </Link>
   )
 }

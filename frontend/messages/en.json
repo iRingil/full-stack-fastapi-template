@@ -47,7 +47,8 @@
     "profile": "My profile",
     "logout": "Log out",
     "openMenu": "Open the menu",
-    "menu": "Menu"
+    "menu": "Menu",
+    "home": "Home page"
   },
   "NotFound": {
     "title": "Page not found",
@@ -57,10 +58,14 @@
   "Home": {
     "metaTitle": "Full Stack FastAPI — a web app template",
     "metaDescription": "A production-ready template: FastAPI and PostgreSQL on the backend, Next.js and HeroUI on the frontend, with accounts, email confirmation and an admin area.",
-    "heroTitle": "Build your web app on a solid foundation",
-    "heroDescription": "FastAPI and PostgreSQL on the backend, Next.js on the frontend. Accounts, email confirmation, password recovery and an admin area are ready from day one.",
-    "getStarted": "Get started",
+    "heroTitle": "FastAPI and Next.js, ready to build on",
+    "heroDescription": "Accounts with email confirmation, password recovery, an admin area and two languages already work. Start with your own pages instead of the plumbing.",
+    "openDashboard": "Open the dashboard",
     "createAccount": "Create an account",
+    "quickStartTitle": "Run it locally",
+    "step_backend": "Start the backend",
+    "step_frontend": "Start the frontend",
+    "step_open": "Open the site",
     "featuresTitle": "Features",
     "feature_backend_title": "Typed async backend",
     "feature_backend_text": "FastAPI, SQLModel and asynchronous PostgreSQL, with a layered architecture and a fully tested API.",

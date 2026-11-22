@@ -1,5 +1,6 @@
 /**
- * @file Navigation of the logged-in area; the admin page is listed for superusers only.
+ * @file Navigation of the logged-in area; the admin page is listed for superusers only. Below the pages, a link
+ * leads back to the public site.
  */
 
 "use client"
@@ -8,15 +9,17 @@ import { cn } from "@heroui/react"
 import { useTranslations } from "next-intl"
 import type { ReactNode } from "react"
 import type { IconType } from "react-icons"
-import { FiBriefcase, FiHome, FiSettings, FiUsers } from "react-icons/fi"
+import { FiArrowLeft, FiBriefcase, FiGrid, FiSettings, FiUsers } from "react-icons/fi"
 import { useCurrentUser } from "@/hooks/useAuth"
 import { Link, usePathname } from "@/i18n/navigation"
-import { DASHBOARD_PATH, matchesPath } from "@/lib/paths"
+import { DASHBOARD_PATH, HOME_PATH, matchesPath } from "@/lib/paths"
 
 type NavItem = { href: string; label: "dashboard" | "items" | "admin" | "settings"; icon: IconType; superuser?: true }
 
+const LINK_CLASS = "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors"
+
 const NAV_ITEMS: readonly NavItem[] = [
-  { href: DASHBOARD_PATH, label: "dashboard", icon: FiHome },
+  { href: DASHBOARD_PATH, label: "dashboard", icon: FiGrid },
   { href: "/items", label: "items", icon: FiBriefcase },
   { href: "/admin", label: "admin", icon: FiUsers, superuser: true },
   { href: "/settings", label: "settings", icon: FiSettings },
@@ -45,7 +48,7 @@ export function SidebarNav({ onNavigate }: { onNavigate?: () => void }): ReactNo
                 onClick={onNavigate}
                 aria-current={isActive ? "page" : undefined}
                 className={cn(
-                  "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+                  LINK_CLASS,
                   isActive
                     ? "bg-accent-soft text-accent-soft-foreground"
                     : "text-muted hover:bg-default hover:text-foreground",
@@ -58,6 +61,16 @@ export function SidebarNav({ onNavigate }: { onNavigate?: () => void }): ReactNo
           )
         })}
       </ul>
+      <div className="mt-4 border-t border-separator pt-4">
+        <Link
+          href={HOME_PATH}
+          onClick={onNavigate}
+          className={cn(LINK_CLASS, "text-muted hover:bg-default hover:text-foreground")}
+        >
+          <FiArrowLeft aria-hidden className="size-4" />
+          {t("home")}
+        </Link>
+      </div>
     </nav>
   )
 }

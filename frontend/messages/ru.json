@@ -39,7 +39,7 @@
     "login": "Войти",
     "signUp": "Регистрация",
     "main": "Основная навигация",
-    "dashboard": "Главная",
+    "dashboard": "Обзор",
     "items": "Записи",
     "admin": "Пользователи",
     "settings": "Настройки",
@@ -47,7 +47,8 @@
     "profile": "Мой профиль",
     "logout": "Выйти",
     "openMenu": "Открыть меню",
-    "menu": "Меню"
+    "menu": "Меню",
+    "home": "Главная страница"
   },
   "NotFound": {
     "title": "Страница не найдена",
@@ -55,12 +56,16 @@
     "goHome": "На главную"
   },
   "Home": {
-    "metaTitle": "Full Stack FastAPI — шаблон веб-приложения",
+    "metaTitle": "Full Stack FastAPI — шаблон веб-приложения",
     "metaDescription": "Готовый к работе шаблон: FastAPI и PostgreSQL на backend, Next.js и HeroUI на frontend, с аккаунтами, подтверждением почты и админкой.",
-    "heroTitle": "Стройте веб-приложение на надёжной основе",
-    "heroDescription": "FastAPI и PostgreSQL на backend, Next.js на frontend. Аккаунты, подтверждение почты, восстановление пароля и админка готовы с первого дня.",
-    "getStarted": "Начать",
+    "heroTitle": "FastAPI и Next.js — основа, готовая к работе",
+    "heroDescription": "Аккаунты с подтверждением почты, восстановление пароля, админка и два языка уже работают. Начните сразу со своих страниц, а не с инфраструктуры.",
+    "openDashboard": "Открыть кабинет",
     "createAccount": "Создать аккаунт",
+    "quickStartTitle": "Запуск на своём компьютере",
+    "step_backend": "Запустите backend",
+    "step_frontend": "Запустите frontend",
+    "step_open": "Откройте сайт",
     "featuresTitle": "Возможности",
     "feature_backend_title": "Типизированный асинхронный backend",
     "feature_backend_text": "FastAPI, SQLModel и асинхронный PostgreSQL, слоистая архитектура и полностью покрытое тестами API.",
@@ -118,7 +123,7 @@
     "resent": "Если аккаунт есть и ещё не подтверждён, новая ссылка уже в пути."
   },
   "Dashboard": {
-    "title": "Главная",
+    "title": "Обзор",
     "greeting": "Привет, {name} 👋",
     "welcome": "С возвращением, рады вас видеть!",
     "unverifiedTitle": "Подтвердите почту",
@@ -161,7 +166,7 @@
     "created": "Пользователь создан",
     "updated": "Пользователь сохранён",
     "deleted": "Пользователь удалён",
-    "newPasswordOptional": "Новый пароль (пусто — оставить прежний)",
+    "newPasswordOptional": "Новый пароль (пусто — оставить прежний)",
     "forbiddenTitle": "Нет доступа",
     "forbiddenDescription": "Управлять пользователями могут только суперпользователи."
   },

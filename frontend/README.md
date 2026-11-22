@@ -43,14 +43,14 @@ npm run generate-client
 
 ## Scripts
 
-| Command                   | Purpose                                                 |
-|---------------------------|---------------------------------------------------------|
-| `npm run dev`             | Development server on port 5173                         |
-| `npm run build`           | Production build (`.next/standalone`)                   |
-| `npm run typecheck`       | TypeScript check                                        |
-| `npm run lint`            | Biome lint and format, with fixes                       |
-| `npm run test`            | Vitest in watch mode; `npm run coverage` runs it once   |
-| `npm run generate-client` | Regenerate `src/client` from the backend's OpenAPI      |
+| Command                   | Purpose                                               |
+| ------------------------- | ----------------------------------------------------- |
+| `npm run dev`             | Development server on port 5173                       |
+| `npm run build`           | Production build (`.next/standalone`)                 |
+| `npm run typecheck`       | TypeScript check                                      |
+| `npm run lint`            | Biome lint and format, with fixes                     |
+| `npm run test`            | Vitest in watch mode; `npm run coverage` runs it once |
+| `npm run generate-client` | Regenerate `src/client` from the backend's OpenAPI    |
 
 CI (`.github/workflows/frontend.yml`) runs `npm audit`, Biome, TypeScript, the tests and the build.
 
