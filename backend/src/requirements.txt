@@ -1,19 +1,17 @@
 Jinja2==3.1.6
-SQLAlchemy[asyncio]==2.0.58
-alembic==1.20.1
-asyncpg==0.32.0
+SQLAlchemy[asyncio,postgresql-asyncpg]==2.1.9
 bcrypt==5.0.0
-email-validator==2.4.0
-fastapi-mail==1.6.8
-fastapi-utils==0.8.0
 fastapi==0.165.0
+fastapi-mail==1.6.8
+fastapi-utils[all]==0.8.0
 loguru==0.8.0
 pydantic-settings==2.16.3
-pydantic==2.14.4
+pydantic[email]==2.14.4
 pyjwt==2.15.1
+# Not imported: FastAPI needs it to parse the login form
 python-multipart==0.0.34
+# Not imported: uvicorn --log-config reads log_config.yaml with it
 pyyaml==6.0.4
 sqlmodel==0.0.50
-tenacity==9.2.1
-typing_inspect==0.9.0
+starlette==1.10.0
 uvicorn==0.54.0
